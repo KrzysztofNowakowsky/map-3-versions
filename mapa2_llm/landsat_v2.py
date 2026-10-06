@@ -133,7 +133,32 @@ def calculate_indices(reflectance: dict) -> dict:
             for name, (a, b) in INDEX_BANDS.items()}
 
 
+# %% Mikołaj: warstwy do wyświetlenia
+def stretch_rgb(reflectance: dict) -> np.ndarray:
+    """RGB z kanałów 4/3/2, każdy rozciągnięty 2-98 percentyl (tylko do podglądu).
+    Zwraca uint8 (wiersze, kolumny, 4) - czwarty kanał to alfa (0 poza maską)."""
+    channels = []
+    for band in (4, 3, 2):
+        a = reflectance[band]
+        lo, hi = np.nanpercentile(a, (2, 98))
+        scaled = np.clip((a - lo) / max(hi - lo, 1e-6), 0, 1)
+        channels.append((np.nan_to_num(scaled) * 255).astype('uint8'))
+    alpha = (np.isfinite(reflectance[4]) * 255).astype('uint8')
+    return np.dstack([*channels, alpha])
+
+
+def index_rgba(array: np.ndarray, name: str) -> np.ndarray:
+    """Koloruje wskaźnik (-1..1) paletą z CMAPS; NaN -> przezroczysty."""
+    rgba = matplotlib.colormaps[CMAPS[name]](np.clip((array + 1) / 2, 0, 1), bytes=True)
+    rgba[..., 3] = np.isfinite(array) * 255
+    return rgba
+
+
 if __name__ == '__main__':
     meta = read_metadata(DATA / 'scene')
     print(meta['product'], meta['date'])
     print('kanały w XML:', len(meta['bands']), '| skala B5:', meta['bands']['sr_band5']['scale'])
+    scene = load_scene()
+    indices = calculate_indices(scene['reflectance'])
+    print('ważne piksele:', int(scene['valid'].sum()), '(wzorzec: 1729266)')
+    print('NDVI średnio:', round(float(np.nanmean(indices['NDVI'])), 3), '(wzorzec: 0.618)')

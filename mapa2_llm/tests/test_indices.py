@@ -30,3 +30,13 @@ class IndicesTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class DisplayTests(unittest.TestCase):
+    def test_rgba_alpha_follows_nan(self):
+        from landsat_v2 import stretch_rgb, index_rgba
+        a = np.array([[np.nan, 0.5]], dtype='float32')
+        self.assertEqual(index_rgba(a, 'NDVI')[..., 3].tolist(), [[0, 255]])
+        rgb = stretch_rgb({i: a.copy() for i in range(2, 7)})
+        self.assertEqual(rgb.shape, (1, 2, 4))
+        self.assertEqual(rgb[..., 3].tolist(), [[0, 255]])
