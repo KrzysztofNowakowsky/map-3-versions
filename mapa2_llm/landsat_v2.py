@@ -51,6 +51,23 @@ def read_metadata(scene: Path) -> dict:
     return {'product': product, 'date': date, 'bands': bands}
 
 
+def quality_mask(qa: np.ndarray, saturation: np.ndarray) -> np.ndarray:
+    """True = dobry piksel. Bity pixel_qa (Collection 1):
+    0 fill, 2 woda (zostaje!), 3 cień chmury, 4 śnieg, 5 chmura,
+    6-7 pewność chmury, 8-9 pewność cirrusa, 10 przesłonięcie terenu.
+    radsat_qa: bit 0 fill, bity 2-6 = nasycenie kanałów B2-B6.
+    """
+    bad_bits = (1 << 0) | (1 << 3) | (1 << 4) | (1 << 5) | (1 << 10)
+    bad = (qa & bad_bits) != 0
+    bad |= ((qa >> 6) & 3) == 3   # wysoka pewność chmury
+    bad |= ((qa >> 8) & 3) == 3   # wysoka pewność cirrusa
+    sat_bits = 1 | sum(1 << b for b in range(2, 7))
+    bad |= (saturation & sat_bits) != 0
+    return ~bad
+
+
+
+
 if __name__ == '__main__':
     meta = read_metadata(DATA / 'scene')
     print(meta['product'], meta['date'])
