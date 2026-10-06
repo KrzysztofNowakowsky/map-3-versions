@@ -45,3 +45,30 @@ for band in satellite_images:
     print(band, os.path.basename(satellite_images[band]))
 
 print('rozmiar kanału 1:', rio.open(satellite_images[1]).shape)
+
+
+# %% Blok 4: podgląd kanału
+def show_band(band, color_map='gray'):
+    """Wyświetla macierz rastra jako obraz z paskiem kolorów."""
+    plt.figure(figsize=(8, 8))
+    image_layer = plt.imshow(band)
+    image_layer.set_cmap(color_map)
+    plt.colorbar()
+    plt.show()
+
+
+def show_band2(band, color_map='gray', remove_negative=True, title=''):
+    """Jak show_band, ale wartości <= 0 (brak danych, tło) zamienia na NaN,
+    żeby nie zaburzały skali kolorów. Przyda się też do wskaźników (blok 8-10)."""
+    matrix = band.astype(float)
+    if remove_negative:
+        matrix[matrix <= 0] = np.nan
+    plt.figure(figsize=(8, 8))
+    image_layer = plt.imshow(matrix)
+    image_layer.set_cmap(color_map)
+    plt.colorbar()
+    plt.title(title)
+    plt.show()
+
+    
+
