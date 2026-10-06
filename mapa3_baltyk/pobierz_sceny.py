@@ -31,7 +31,8 @@ def wczytaj_daty(nazwa):
 
 
 def znajdz_produkt(data):
-    """Produkt L2A z kafla 34UCF z danego dnia; przy kilku wersjach bierze najnowsze przetworzenie."""
+    """Produkt L2A z kafla 34UCF z danego dnia. Bywa kilka (dwa przeloty albo skrawek kafla na
+    krawędzi pasa) - bierzemy NAJWIĘKSZY, bo pokrywa najwięcej kafla (mały = głównie brak danych)."""
     filtr = (f"Collection/Name eq 'SENTINEL-2' and contains(Name,'MSIL2A') and contains(Name,'_{KAFEL}_') "
              f"and ContentDate/Start ge {data}T00:00:00.000Z and ContentDate/Start le {data}T23:59:59.999Z")
     r = requests.get(f'{KATALOG}/Products', params={'$filter': filtr, '$top': 20}, timeout=60)
@@ -39,7 +40,7 @@ def znajdz_produkt(data):
     produkty = r.json()['value']
     if not produkty:
         return None
-    return max(produkty, key=lambda p: p['Name'].split('_')[-1])
+    return max(produkty, key=lambda p: p['ContentLength'])
 
 
 def pliki_20m(produkt):
