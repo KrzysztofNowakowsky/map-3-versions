@@ -70,5 +70,17 @@ def show_band2(band, color_map='gray', remove_negative=True, title=''):
     plt.title(title)
     plt.show()
 
-    
 
+
+# %% Blok 5: test podglądu
+# najpierw losowa macierz - sprawdzamy, czy funkcja w ogóle rysuje
+test = np.random.randint(low=0, high=255, size=(200, 200))
+show_band(test, color_map='winter')
+
+# potem prawdziwy kanał 5 (bliska podczerwień) z całej sceny
+print('kanał 5:', satellite_images[5])
+with rio.open(satellite_images[5], 'r') as src:
+    band_matrix = src.read(1)
+
+show_band(band_matrix)
+show_band2(band_matrix, title='Kanał 5 (bez wartości <= 0)')
