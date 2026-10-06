@@ -14,7 +14,11 @@ import json
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
+import matplotlib
 import numpy as np
+import rasterio
+from rasterio.features import geometry_mask
+from rasterio.warp import transform_geom
 
 ROOT = Path(__file__).resolve().parent
 DATA = ROOT.parent / 'data' / 'LABOLATORIUM' / 'data'   # scene/ + aoi.geojson
@@ -66,6 +70,50 @@ def quality_mask(qa: np.ndarray, saturation: np.ndarray) -> np.ndarray:
     return ~bad
 
 
+# %% Mikołaj: wczytanie sceny
+def load_scene(data_dir: Path = DATA) -> dict:
+    """Czyta kanały B2-B6 i maski QA, przycina do granicy aoi.geojson.
+    Zwraca DN, reflektancję (NaN poza ważnymi pikselami), maski i profil rastra."""
+    data_dir = Path(data_dir)
+    meta = read_metadata(data_dir / 'scene')
+    aoi = json.loads((data_dir / 'aoi.geojson').read_text(encoding='utf-8'))
+
+    raw, profile = {}, None
+    for key in [*(f'sr_band{i}' for i in range(2, 7)), 'pixel_qa', 'radsat_qa']:
+        with rasterio.open(data_dir / 'scene' / meta['bands'][key]['file']) as src:
+            if profile is None:
+                profile = src.profile.copy()
+            elif (src.crs != profile['crs'] or src.transform != profile['transform']
+                  or src.width != profile['width'] or src.height != profile['height']):
+                raise ValueError(f'Niezgodna siatka rastra: {key}')
+            raw[key] = src.read(1)
+
+    # granica: GeoJSON jest w EPSG:4326, raster w UTM -> przeliczamy geometrię
+    geoms = [transform_geom('EPSG:4326', profile['crs'], f['geometry']) for f in aoi['features']]
+    inside = geometry_mask(geoms, out_shape=raw['pixel_qa'].shape,
+                           transform=profile['transform'], invert=True)
+    if not inside.any():
+        raise ValueError('Granica nie przecina sceny. Sprawdź CRS i zasięg.')
+
+    # wspólna maska: w granicy + dobra jakość + nie fill + w zakresie valid_range
+    quality = quality_mask(raw['pixel_qa'], raw['radsat_qa'])
+    valid = inside & quality
+    for i in range(2, 7):
+        b, a = meta['bands'][f'sr_band{i}'], raw[f'sr_band{i}']
+        valid &= a != b['fill']
+        valid &= (a >= b['valid_min']) & (a <= b['valid_max'])
+    if not valid.any():
+        raise ValueError('Po maskowaniu nie pozostały ważne piksele.')
+
+    # DN -> reflektancja ze skali/offsetu z XML (nie "magiczne 10000")
+    reflectance = {}
+    for i in range(2, 7):
+        b = meta['bands'][f'sr_band{i}']
+        a = raw[f'sr_band{i}'].astype('float32') * b['scale'] + b['offset']
+        reflectance[i] = np.where(valid, a, np.nan)
+
+    return {'metadata': meta, 'profile': profile, 'raw': raw, 'inside': inside,
+            'valid': valid, 'quality': quality, 'reflectance': reflectance, 'aoi': aoi}
 
 
 if __name__ == '__main__':
