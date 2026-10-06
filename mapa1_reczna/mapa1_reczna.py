@@ -8,7 +8,7 @@
 #   blok 6-7  Andrzej      - przycięcie do granicy powiatu (clip_area)
 #   blok 8-10 Krzysiek      - wskaźniki, zapis NDVI.tif, komendy GDAL
 
-# %% Blok 1: importy
+# Blok 1: importy
 import os
 import matplotlib.pyplot as plt
 import numpy as np
@@ -23,7 +23,7 @@ VECTOR = os.path.join('..', 'data', 'Landsat8', 'vector', 'krakow_krakowskie.shp
 
 
 
-# %% Blok 2: lista kanałów
+#  Blok 2: lista kanałów
 def read_landsat_images(folder_name):
     """Zwraca słownik {nr kanału: ścieżka do pliku} dla kanałów 1-7."""
     file_list = os.listdir(folder_name)
@@ -37,3 +37,12 @@ def read_landsat_images(folder_name):
         print('Uwaga: znaleziono', len(channel_list), 'kanałów zamiast 7')
     channel_numbers = np.arange(1, 8)
     return dict(zip(channel_numbers, channel_list))
+
+
+
+# Blok 3: sprawdzenie
+satellite_images = read_landsat_images(LC08_DIR)
+for band in satellite_images:
+    print(band, os.path.basename(satellite_images[band]))
+
+print('rozmiar kanału 1:', rio.open(satellite_images[1]).shape)
