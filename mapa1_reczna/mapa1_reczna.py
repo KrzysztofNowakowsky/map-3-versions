@@ -103,3 +103,23 @@ def clip_area(vector_file, raster_file, save_image_to):
                      'transform': transform})
     with rio.open(save_image_to, 'w', **metadata) as g_tiff:
         g_tiff.write(clipped_image)
+
+
+        # %% Blok 7: przycięcie wszystkich kanałów do powiatu
+CLIPPED_DIR = 'clipped'               # mapa1_reczna/clipped/ jest w .gitignore
+os.makedirs(CLIPPED_DIR, exist_ok=True)
+
+for band in satellite_images:
+    destination = os.path.join(CLIPPED_DIR, 'LC_clipped_band' + str(band) + '.tif')
+    clip_area(VECTOR, satellite_images[band], destination)
+
+# te same funkcje co dla całej sceny - nazwy plików pasują do filtra (LC..band..tif)
+clipped_bands = read_landsat_images(CLIPPED_DIR)
+for band in clipped_bands:
+    print(band, clipped_bands[band])
+
+with rio.open(clipped_bands[5], 'r') as src:
+    band_matrix = src.read(1)
+
+show_band(band_matrix)
+# clipped_bands -> dalej używa Krzysiek do wskaźników (blok 8-10)
