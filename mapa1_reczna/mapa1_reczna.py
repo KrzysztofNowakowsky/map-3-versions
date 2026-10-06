@@ -45,3 +45,81 @@ for band in satellite_images:
     print(band, os.path.basename(satellite_images[band]))
 
 print('rozmiar kanału 1:', rio.open(satellite_images[1]).shape)
+
+
+# %% Blok 4: podgląd kanału
+def show_band(band, color_map='gray'):
+    """Wyświetla macierz rastra jako obraz z paskiem kolorów."""
+    plt.figure(figsize=(8, 8))
+    image_layer = plt.imshow(band)
+    image_layer.set_cmap(color_map)
+    plt.colorbar()
+    plt.show()
+
+
+def show_band2(band, color_map='gray', remove_negative=True, title=''):
+    """Jak show_band, ale wartości <= 0 (brak danych, tło) zamienia na NaN,
+    żeby nie zaburzały skali kolorów. Przyda się też do wskaźników (blok 8-10)."""
+    matrix = band.astype(float)
+    if remove_negative:
+        matrix[matrix <= 0] = np.nan
+    plt.figure(figsize=(8, 8))
+    image_layer = plt.imshow(matrix)
+    image_layer.set_cmap(color_map)
+    plt.colorbar()
+    plt.title(title)
+    plt.show()
+
+
+# %% Blok 5: test podglądu
+# najpierw losowa macierz - sprawdzamy, czy funkcja w ogóle rysuje
+test = np.random.randint(low=0, high=255, size=(200, 200))
+show_band(test, color_map='winter')
+
+# potem prawdziwy kanał 5 (bliska podczerwień) z całej sceny
+print('kanał 5:', satellite_images[5])
+with rio.open(satellite_images[5], 'r') as src:
+    band_matrix = src.read(1)
+
+show_band(band_matrix)
+show_band2(band_matrix, title='Kanał 5 (bez wartości <= 0)')
+
+
+# %% Blok 6: przycięcie rastra do granicy
+def clip_area(vector_file, raster_file, save_image_to):
+    """Przycina raster do geometrii z pliku wektorowego (shp) i zapisuje GeoTIFF."""
+    with fio.open(vector_file, 'r') as clipper:
+        geometry = [feature['geometry'] for feature in clipper]
+
+    with rio.open(raster_file, 'r') as raster_source:
+        # crop=True -> wynik ma zasięg granicy, a nie całej sceny
+        clipped_image, transform = rmask.mask(raster_source, geometry, crop=True)
+        metadata = raster_source.meta.copy()
+
+    # nowy rozmiar i transformacja po przycięciu
+    metadata.update({'driver': 'GTiff',
+                     'height': clipped_image.shape[1],
+                     'width': clipped_image.shape[2],
+                     'transform': transform})
+    with rio.open(save_image_to, 'w', **metadata) as g_tiff:
+        g_tiff.write(clipped_image)
+
+
+        # %% Blok 7: przycięcie wszystkich kanałów do powiatu
+CLIPPED_DIR = 'clipped'               # mapa1_reczna/clipped/ jest w .gitignore
+os.makedirs(CLIPPED_DIR, exist_ok=True)
+
+for band in satellite_images:
+    destination = os.path.join(CLIPPED_DIR, 'LC_clipped_band' + str(band) + '.tif')
+    clip_area(VECTOR, satellite_images[band], destination)
+
+# te same funkcje co dla całej sceny - nazwy plików pasują do filtra (LC..band..tif)
+clipped_bands = read_landsat_images(CLIPPED_DIR)
+for band in clipped_bands:
+    print(band, clipped_bands[band])
+
+with rio.open(clipped_bands[5], 'r') as src:
+    band_matrix = src.read(1)
+
+show_band(band_matrix)
+# clipped_bands -> dalej używa Krzysiek do wskaźników (blok 8-10)
