@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Sinice w Zatoce Gdańskiej • lato 2026</title>
+<link rel="stylesheet" href="vendor/leaflet.css">
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 15px system-ui, sans-serif; color: #10293a; background: #f3f6f8; }
+  header { padding: 14px 22px; background: #0b3954; color: #fff; }
+  header h1 { margin: 0; font-size: 22px; }
+  header p { margin: 4px 0 0; font-size: 14px; color: #cfe3ee; }
+  main { display: grid; grid-template-columns: 1fr 300px; height: calc(100vh - 74px); }
+  #mapa { height: 100%; }
+  aside { padding: 18px; overflow: auto; background: #fff; }
+  aside h2 { font-size: 16px; margin: 0 0 8px; }
+  label { display: block; font-weight: 600; margin-top: 14px; }
+  select { width: 100%; padding: 6px; margin-top: 6px; }
+  .rampa { height: 14px; border-radius: 3px; margin-top: 6px; }
+  .skala { display: flex; justify-content: space-between; font-size: 12px; }
+  .wynik { font-size: 28px; font-weight: 700; color: #a50026; }
+  .opis { font-size: 13px; line-height: 1.5; color: #4b6272; }
+  @media (max-width: 760px) {
+    main { display: flex; flex-direction: column; height: auto; }
+    #mapa { height: 60vh; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>Sinice w Zatoce Gdańskiej • lato 2026</h1>
+  <p>Sentinel-2 • indeks MCI (Maximum Chlorophyll Index) • AGH, projekt grupowy</p>
+</header>
+<main>
+  <div id="mapa" aria-label="Mapa zakwitów"></div>
+  <aside>
+    <h2>Wybór sceny</h2>
+    <label for="data">Data zdjęcia</label>
+    <select id="data"></select>
+    <label for="warstwa">Warstwa</label>
+    <select id="warstwa">
+      <option value="mci">MCI (chlorofil)</option>
+      <option value="rgb">Prawdziwe kolory (RGB)</option>
+    </select>
+    <div id="legenda">
+      <div id="rampa" class="rampa"></div>
+      <div class="skala"><span id="od"></span><span>MCI</span><span id="do"></span></div>
+    </div>
+    <label>Zakwit w zatoce</label>
+    <div class="wynik" id="zakwit">–</div>
+    <p class="opis" id="szczegoly"></p>
+    <p class="opis">MCI = B5 − 0,4667·B4 − 0,5333·B6 (×10000). Zakwit: MCI powyżej progu, liczony tylko na wodzie bez chmur.
+      Szare/puste miejsca = chmury lub ląd.</p>
+  </aside>
+</main>
+<script src="vendor/leaflet.js"></script>
+<script>
+const mapa = L.map('mapa').setView([54.58, 18.85], 10);
+L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  maxZoom: 16, attribution: '© OpenStreetMap • Sentinel-2: Copernicus/ESA'
+}).addTo(mapa);
+let warstwa = null, sceny = [];
+
+function pokaz() {
+  const data = document.querySelector('#data').value;
+  const typ = document.querySelector('#warstwa').value;
+  if (warstwa) mapa.removeLayer(warstwa);
+  warstwa = L.tileLayer(`kafelki/${typ}/${data}/{z}/{x}/{y}.png`, {
+    minZoom: 9, maxNativeZoom: 11, maxZoom: 16, opacity: typ === 'mci' ? 0.9 : 1
+  }).addTo(mapa);
+  document.querySelector('#legenda').hidden = typ !== 'mci';
+  const s = sceny.find(x => x.data === data);
+  document.querySelector('#zakwit').textContent = s.zakwit_pct === null ? 'brak danych' : s.zakwit_pct + '%';
+  document.querySelector('#szczegoly').textContent =
+    `Widoczne (bez chmur): ${s.wazne_pct}% zatoki` + (s.mci_mediana === null
+      ? ' • za mało czystej wody, by liczyć zakwit' : ` • mediana MCI: ${s.mci_mediana}`)
+    + (s.uzupelnione_z ? ` • Zatoka Pucka uzupełniona z dnia ${s.uzupelnione_z} (tego dnia satelita jej nie objął)` : '');
+}
+
+fetch('sceny.json').then(r => r.json()).then(cfg => {
+  sceny = cfg.sceny;
+  const wybor = document.querySelector('#data');
+  sceny.forEach(s => wybor.add(new Option(
+    `${s.data} (${s.zakwit_pct === null ? 'brak danych' : 'zakwit ' + s.zakwit_pct + '%'})`, s.data)));
+  document.querySelector('#rampa').style.background = `linear-gradient(to right, ${cfg.legenda.kolory.join(',')})`;
+  document.querySelector('#od').textContent = cfg.legenda.od;
+  document.querySelector('#do').textContent = cfg.legenda.do;
+  wybor.addEventListener('change', pokaz);
+  document.querySelector('#warstwa').addEventListener('change', pokaz);
+  pokaz();
+});
+fetch('zatoka.geojson').then(r => r.json()).then(g =>
+  L.geoJSON(g, { style: { color: '#0b3954', weight: 1, fill: false, dashArray: '4 4' } }).addTo(mapa));
+</script>
+</body>
+</html>
