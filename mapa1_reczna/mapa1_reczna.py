@@ -71,7 +71,6 @@ def show_band2(band, color_map='gray', remove_negative=True, title=''):
     plt.show()
 
 
-
 # %% Blok 5: test podglądu
 # najpierw losowa macierz - sprawdzamy, czy funkcja w ogóle rysuje
 test = np.random.randint(low=0, high=255, size=(200, 200))
@@ -84,3 +83,23 @@ with rio.open(satellite_images[5], 'r') as src:
 
 show_band(band_matrix)
 show_band2(band_matrix, title='Kanał 5 (bez wartości <= 0)')
+
+
+# %% Blok 6: przycięcie rastra do granicy
+def clip_area(vector_file, raster_file, save_image_to):
+    """Przycina raster do geometrii z pliku wektorowego (shp) i zapisuje GeoTIFF."""
+    with fio.open(vector_file, 'r') as clipper:
+        geometry = [feature['geometry'] for feature in clipper]
+
+    with rio.open(raster_file, 'r') as raster_source:
+        # crop=True -> wynik ma zasięg granicy, a nie całej sceny
+        clipped_image, transform = rmask.mask(raster_source, geometry, crop=True)
+        metadata = raster_source.meta.copy()
+
+    # nowy rozmiar i transformacja po przycięciu
+    metadata.update({'driver': 'GTiff',
+                     'height': clipped_image.shape[1],
+                     'width': clipped_image.shape[2],
+                     'transform': transform})
+    with rio.open(save_image_to, 'w', **metadata) as g_tiff:
+        g_tiff.write(clipped_image)
