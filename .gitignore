@@ -21,3 +21,7 @@ mapa1_reczna/*.tif
 mapa2_llm/outputs/
 # GDAL tworzy *.aux.xml obok rastrów
 *.aux.xml
+
+# mapa 3: sceny i wygenerowana strona (dane ~6,5 GB, strona budowana skryptem)
+mapa3_baltyk/dane/
+mapa3_baltyk/site/
