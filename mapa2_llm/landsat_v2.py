@@ -116,6 +116,23 @@ def load_scene(data_dir: Path = DATA) -> dict:
             'valid': valid, 'quality': quality, 'reflectance': reflectance, 'aoi': aoi}
 
 
+# %% Mikołaj: wskaźniki
+def normalized_difference(a: np.ndarray, b: np.ndarray) -> np.ndarray:
+    """(a - b) / (a + b). Zera i wartości ujemne zostają, zerowy mianownik lub NaN -> NaN."""
+    a, b = np.asarray(a, dtype='float32'), np.asarray(b, dtype='float32')
+    out = np.full(np.broadcast_shapes(a.shape, b.shape), np.nan, dtype='float32')
+    denominator = a + b
+    ok = np.isfinite(a) & np.isfinite(b) & (np.abs(denominator) > 1e-6)
+    np.divide(a - b, denominator, out=out, where=ok)
+    return out
+
+
+def calculate_indices(reflectance: dict) -> dict:
+    """NDVI, NDBI, MNDWI według INDEX_BANDS."""
+    return {name: normalized_difference(reflectance[a], reflectance[b])
+            for name, (a, b) in INDEX_BANDS.items()}
+
+
 if __name__ == '__main__':
     meta = read_metadata(DATA / 'scene')
     print(meta['product'], meta['date'])
