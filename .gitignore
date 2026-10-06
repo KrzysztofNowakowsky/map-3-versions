@@ -1,2 +1,23 @@
 data.zip
 NASA.rar
+
+# --- lokalne dane i wyniki (nie commitujemy, dane leżą w ../NASA) ---
+.venv/
+.DS_Store
+._*
+__pycache__/
+.ipynb_checkpoints/
+data/Landsat8/LC08
+data/Landsat8/clipped/
+data/Landsat8/*.tif
+data/Landsat8/site/
+data/LABOLATORIUM/data/scene
+data/LABOLATORIUM/outputs/
+
+# wyniki naszych wersji (mapa 1 i 2)
+mapa1_reczna/clipped/
+mapa1_reczna/site/
+mapa1_reczna/*.tif
+mapa2_llm/outputs/
+# GDAL tworzy *.aux.xml obok rastrów
+*.aux.xml
