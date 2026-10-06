@@ -8,7 +8,7 @@ import numpy as np
 from PIL import Image
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from przetworz import mci, poszerz, maska_morza, wazne_piksele, statystyki, zmniejsz_kafelki
+from przetworz import mci, poszerz, maska_morza, wazne_piksele, statystyki, zmniejsz_kafelki, uzupelnij_luke
 
 
 class MciTests(unittest.TestCase):
@@ -32,24 +32,40 @@ class MaskiTests(unittest.TestCase):
         self.assertTrue(maska_morza([woda, lad, lad]).all())        # 33% scen = woda -> morze
         self.assertFalse(maska_morza([woda, lad, lad, lad, lad, lad]).any())  # 17% -> nie
 
-    def test_cirrus_zostaje_chmura_nie(self):
+    def test_chmura_i_cirrus_odrzucone_z_buforem(self):
         scl = np.full((20, 20), 6)
         scl[0:2, 0:2] = 9                      # chmura w rogu
-        scl[15:20, 15:20] = 10                 # cienki cirrus
+        scl[15:20, 15:20] = 10                 # cirrus - zawyża MCI, więc też odrzucamy
         ok = wazne_piksele(scl, np.ones((20, 20), bool))
-        self.assertTrue(ok[17, 17])            # cirrus = ważny
+        self.assertFalse(ok[17, 17])           # cirrus
         self.assertFalse(ok[3, 3])             # 100 m bufora od chmury
+        self.assertTrue(ok[9, 9])              # czysta woda daleko od chmur
 
     def test_statystyki_zakwitu(self):
         v = np.array([10, 20, 40, 50, np.nan])
-        s = statystyki(v, ile_wazne=4, ile_morza=8)
-        self.assertEqual(s['wazne_pct'], 50.0)
+        s = statystyki(v, ile_wazne=4, ile_morza=10)
+        self.assertEqual(s['wazne_pct'], 40.0)
         self.assertEqual(s['zakwit_pct'], 50.0)
 
     def test_za_malo_pikseli_brak_wyniku(self):
         # regresja: 28.07 - skrawek sceny, kilka pikseli dawało "95% zakwitu"
         s = statystyki(np.array([50.0, 60.0]), ile_wazne=2, ile_morza=1000)
         self.assertIsNone(s['zakwit_pct'])
+
+
+class UzupelnianieTests(unittest.TestCase):
+    def test_luka_wypelniona_z_dawcy_z_jego_maska(self):
+        def scena(scl, dn):
+            return {'B04': np.full((2, 2), dn), 'B05': np.full((2, 2), dn), 'B06': np.full((2, 2), dn),
+                    'SCL': np.array(scl), 'TCI': np.full((3, 2, 2), dn, 'uint8')}
+        cel = scena([[0, 6], [0, 6]], 10)        # lewa kolumna: brak danych (przelot 9:50)
+        dawca = scena([[6, 6], [9, 6]], 50)      # u dawcy: woda i jedna chmura
+        nowe, ile = uzupelnij_luke(cel, dawca)
+        self.assertEqual(ile, 2)
+        self.assertEqual(nowe['B05'][0, 0], 50)  # wzięte od dawcy
+        self.assertEqual(nowe['B05'][0, 1], 10)  # własne dane zostają
+        self.assertEqual(nowe['SCL'][1, 0], 9)   # chmura dawcy dalej jest chmurą
+        self.assertEqual(cel['B05'][0, 0], 10)   # oryginał nieruszony
 
 
 class KafelkiTests(unittest.TestCase):

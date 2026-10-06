@@ -26,10 +26,12 @@ sys.path.insert(0, str(LABORATORIUM_SRC))
 from landsat_lab import xyz_tiles   # noqa: E402
 
 PROG_ZAKWITU = 30          # MCI x10000 > 30 = zakwit (próg z pracy o Jeziorze Ełckim)
-MIN_WAZNYCH_PCT = 5        # poniżej tego % widocznego morza nie podajemy % zakwitu
+MIN_WAZNYCH_PCT = 30       # poniżej tego % czystej wody nie podajemy % zakwitu (zostają resztki chmur)
+MIN_POKRYCIA_STRONY = 60   # na stronę trafiają tylko daty z >= 60% czystej wody w zatoce
+MAX_DNI_UZUPELNIENIA = 4   # dziurę po przelocie 9:50 (Zatoka Pucka) bierzemy z przelotu +-4 dni
 ZOOM_MIN, ZOOM_MAX = 9, 11  # 11 ~ 40 m/piksel; zawirowania mają km, a strona mieści się na serwerze
-SCL_WODA = [6, 10]          # woda + cienki cirrus (MCI jest odporne na płaskie zamglenie)
-SCL_CHMURY = [3, 8, 9]      # cień chmur, chmury średnie i wysokie
+SCL_WODA = [6]              # tylko czysta woda
+SCL_CHMURY = [3, 8, 9, 10]  # cień chmur, chmury średnie i wysokie, cirrus (zawyża MCI - sprawdzone na 33 scenach)
 SKALA_MCI = LinearSegmentedColormap.from_list(
     'mci', ['#08306b', '#2171b5', '#41b6c4', '#7fcd5b', '#f7e43a', '#f46d43', '#a50026'])
 MCI_OD, MCI_DO = -10, 80   # zakres kolorów legendy
@@ -83,6 +85,37 @@ def wczytaj(folder, zatoka_4326):
     return pasma, profil, w_wielokacie
 
 
+def uzupelnij_luke(pasma, dawca):
+    """Przelot ok. 9:50 UTC nie sięga Zatoki Puckiej (SCL=0 = brak danych). Tam, gdzie scena nie ma
+    danych, a dawca (najbliższy przelot 10:00) ma, wstawiamy piksele dawcy we WSZYSTKICH pasmach -
+    łącznie z jego SCL, więc chmury z dnia dawcy są dalej maskowane. Zwraca (nowe pasma, ile pikseli)."""
+    luka = (pasma['SCL'] == 0) & (dawca['SCL'] != 0)
+    if not luka.any():
+        return pasma, 0
+    nowe = {k: v.copy() for k, v in pasma.items()}
+    for nazwa in ['B04', 'B05', 'B06', 'SCL']:
+        nowe[nazwa][luka] = dawca[nazwa][luka]
+    nowe['TCI'][:, luka] = dawca['TCI'][:, luka]
+    return nowe, int(luka.sum())
+
+
+def znajdz_dawce(data, sceny, w_wielokacie):
+    """Najbliższa data (max MAX_DNI_UZUPELNIENIA dni) z danymi tam, gdzie scena ich nie ma."""
+    from datetime import date
+    dzien = date.fromisoformat(data)
+    luka = (sceny[data][0]['SCL'] == 0) & w_wielokacie
+    if luka.mean() < 0.001:
+        return None
+    kandydaci = []
+    for inna, (pasma, _, _) in sceny.items():
+        roznica = abs((date.fromisoformat(inna) - dzien).days)
+        if inna != data and roznica <= MAX_DNI_UZUPELNIENIA:
+            pokrycie = (pasma['SCL'][luka] != 0).mean()
+            if pokrycie > 0.9:
+                kandydaci.append((roznica, -pokrycie, inna))
+    return min(kandydaci)[2] if kandydaci else None
+
+
 def maska_morza(lista_scl, min_udzial=0.2):
     """Stała maska morza: piksel, który był wodą (SCL=6) w >= 20% scen. Odcina ląd pod cirrusem."""
     woda = np.mean([scl == 6 for scl in lista_scl], axis=0)
@@ -90,7 +123,7 @@ def maska_morza(lista_scl, min_udzial=0.2):
 
 
 def wazne_piksele(scl, morze):
-    """Morze bez chmur, z buforem 60 m od lądu i 100 m od chmur."""
+    """Czysta woda morza: bez chmur i cirrusa, z buforem 60 m od lądu i 100 m od chmur."""
     return (morze & np.isin(scl, SCL_WODA)
             & ~poszerz(~morze, 3)
             & ~poszerz(np.isin(scl, SCL_CHMURY), 5))
@@ -149,13 +182,20 @@ def main():
 
     tmp = TU / 'dane' / 'tmp'
     tmp.mkdir(parents=True, exist_ok=True)
-    wyniki = []
+    wyniki, wszystkie = [], []
     for data, (pasma, profil, _) in sceny.items():
+        dawca = znajdz_dawce(data, sceny, w_wielokacie)
+        if dawca:
+            pasma, ile = uzupelnij_luke(pasma, sceny[dawca][0])
         ok = wazne_piksele(pasma['SCL'], morze)
         b4, b5, b6 = (pasma[b].astype('float32') for b in ['B04', 'B05', 'B06'])
         wartosc = np.where(ok, mci(b4, b5, b6), np.nan)
-        stat = statystyki(wartosc, int(ok.sum()), ile_morza)
-        wyniki.append({'data': data, **stat})
+        stat = {'data': data, **statystyki(wartosc, int(ok.sum()), ile_morza), 'uzupelnione_z': dawca}
+        wszystkie.append(stat)
+        if stat['wazne_pct'] < MIN_POKRYCIA_STRONY:
+            print(data, 'pominięta na stronie - czystej wody tylko', stat['wazne_pct'], '%')
+            continue
+        wyniki.append(stat)
         print(data, stat)
 
         zapisz_rgba(tmp / 'mci.tif', koloruj_mci(wartosc), profil)
@@ -173,10 +213,10 @@ def main():
     shutil.copy(TU / 'zatoka.geojson', SITE / 'zatoka.geojson')
     legenda = ['#' + ''.join(f'{c:02x}' for c in SKALA_MCI(t, bytes=True)[:3]) for t in np.linspace(0, 1, 7)]
     (SITE / 'sceny.json').write_text(json.dumps({
-        'sceny': wyniki, 'prog_zakwitu': PROG_ZAKWITU, 'zoom_min': ZOOM_MIN, 'zoom_max': ZOOM_MAX,
+        'sceny': wyniki, 'wszystkie_sceny': wszystkie, 'prog_zakwitu': PROG_ZAKWITU, 'zoom_min': ZOOM_MIN, 'zoom_max': ZOOM_MAX,
         'legenda': {'od': MCI_OD, 'do': MCI_DO, 'kolory': legenda}}, ensure_ascii=False, indent=1), encoding='utf-8')
     shutil.rmtree(tmp)
-    print('gotowe ->', SITE)
+    print('na stronie', len(wyniki), 'z', len(wszystkie), 'dat ->', SITE)
 
 
 if __name__ == '__main__':
