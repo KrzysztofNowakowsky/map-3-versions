@@ -3,10 +3,9 @@
 #
 # Na podstawie skryptu z zajęć
 # Podział pracy:
-#   blok 1-3  Kuba     - importy, wczytanie listy kanałów
-#   blok 4-5  Mikołaj      - podgląd kanału (show_band, show_band2)
-#   blok 6-7  Andrzej      - przycięcie do granicy powiatu (clip_area)
-#   blok 8-10 Krzysiek      - wskaźniki, zapis NDVI.tif, komendy GDAL
+#   blok 1-3  Kuba      - importy, wczytanie listy kanałów
+#   blok 4-7  Mikołaj   - podgląd kanału (show_band, show_band2) + przycięcie do granicy powiatu (clip_area)
+#   blok 8-10 Krzysiek  - wskaźniki, zapis NDVI.tif, komendy GDAL
 
 # Blok 1: importy
 import os
