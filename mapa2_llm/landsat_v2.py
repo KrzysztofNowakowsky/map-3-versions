@@ -23,3 +23,35 @@ DATA = ROOT.parent / 'data' / 'LABOLATORIUM' / 'data'   # scene/ + aoi.geojson
 INDEX_BANDS = {'NDVI': (5, 4), 'NDBI': (6, 5), 'MNDWI': (3, 6)}
 CMAPS = {'NDVI': 'RdYlGn', 'NDBI': 'PuOr_r', 'MNDWI': 'BrBG'}
 NS = {'e': 'http://espa.cr.usgs.gov/v2'}   # przestrzeń nazw w XML z ESPA
+
+
+
+
+def read_metadata(scene: Path) -> dict:
+    """Czyta plik XML ESPA: nazwa produktu, data i dla każdego kanału skala, offset, fill, zakres."""
+    files = list(Path(scene).glob('*.xml'))
+    if len(files) != 1:
+        raise ValueError(f'Oczekiwano jednego pliku XML w {scene}, jest {len(files)}.')
+    root = ET.parse(files[0]).getroot()
+    product = root.findtext('e:global_metadata/e:product_id', namespaces=NS)
+    if not product or '_01_' not in product:
+        raise ValueError('Obsługujemy tylko Landsat Collection 1 (z pixel_qa).')
+    bands = {}
+    for b in root.findall('e:bands/e:band', NS):
+        valid = b.find('e:valid_range', NS)
+        bands[b.attrib['name']] = {
+            'file': b.findtext('e:file_name', namespaces=NS),
+            'scale': float(b.get('scale_factor', 1)),
+            'offset': float(b.get('add_offset', 0)),
+            'fill': float(b.get('fill_value', -9999)),
+            'valid_min': float(valid.get('min')) if valid is not None else None,
+            'valid_max': float(valid.get('max')) if valid is not None else None,
+        }
+    date = root.findtext('e:global_metadata/e:acquisition_date', namespaces=NS)
+    return {'product': product, 'date': date, 'bands': bands}
+
+
+if __name__ == '__main__':
+    meta = read_metadata(DATA / 'scene')
+    print(meta['product'], meta['date'])
+    print('kanały w XML:', len(meta['bands']), '| skala B5:', meta['bands']['sr_band5']['scale'])
