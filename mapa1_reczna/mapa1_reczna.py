@@ -123,3 +123,20 @@ with rio.open(clipped_bands[5], 'r') as src:
 
 show_band(band_matrix)
 # clipped_bands -> dalej używa Krzysiek do wskaźników (blok 8-10)
+
+# %% Blok 8 - odczytywanie zdjec z lansdata
+def read_landsat_images(folder_name):
+    file_list = os.listdir(folder_name)
+    channel_list = []
+    for f in file_list:
+        if (f.startswith('LC') and f.endswith('.tif')):
+            if 'band' in f:
+                channel_list.append(folder_name + f)
+    channel_list.sort()
+    channel_numbers = np.arange(1, 8)
+    bands_dictionary = dict(zip(channel_numbers, channel_list))
+    return bands_dictionary
+
+satellite_images = read_landsat_images(LC08_DIR)
+
+# %%
