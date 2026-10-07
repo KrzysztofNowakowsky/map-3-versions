@@ -152,7 +152,7 @@ def index_rgba(array: np.ndarray, name: str) -> np.ndarray:
     rgba = matplotlib.colormaps[CMAPS[name]](np.clip((array + 1) / 2, 0, 1), bytes=True)
     rgba[..., 3] = np.isfinite(array) * 255
     return rgba
-    
+
 def write_geotiff(path: Path, data: np.ndarray, profile: dict, rgba=False):
     path.parent.mkdir(parents=True, exist_ok=True)
     p = profile.copy()
@@ -172,7 +172,32 @@ def write_geotiff(path: Path, data: np.ndarray, profile: dict, rgba=False):
             dst.set_band_description(1, path.stem)
             dst.update_tags(meaning='normalized difference; no numeric clipping; NoData=-9999')
 
-
+def xyz_tiles(rgba_tif: Path, target: Path, minzoom=9, maxzoom=12) -> int:
+    """Kafelki XYZ 256 px w EPSG:3857. Oś y rośnie na południe (tms=False)."""
+    if not 0 <= minzoom <= maxzoom <= 15:
+        raise ValueError('W ćwiczeniu dozwolone 0 <= minzoom <= maxzoom <= 15.')
+    radius = 20037508.342789244
+    count = 0
+    with rasterio.open(rgba_tif) as src:
+        west, south, east, north = transform_bounds(src.crs, 'EPSG:3857', *src.bounds, densify_pts=21)
+        for z in range(minzoom, maxzoom + 1):
+            n = 2 ** z
+            span = 2 * radius / n
+            x0, x1 = max(0, math.floor((west + radius) / span)), min(n-1, math.floor((east + radius) / span))
+            y0, y1 = max(0, math.floor((radius - north) / span)), min(n-1, math.floor((radius - south) / span))
+            for x in range(x0, x1 + 1):
+                folder = target / str(z) / str(x)
+                folder.mkdir(parents=True, exist_ok=True)
+                for y in range(y0, y1 + 1):
+                    dst = np.zeros((4, 256, 256), dtype='uint8')
+                    bounds = (x*span-radius, radius-(y+1)*span, (x+1)*span-radius, radius-y*span)
+                    reproject(source=rasterio.band(src, [1,2,3,4]), destination=dst,
+                              src_transform=src.transform, src_crs=src.crs,
+                              dst_transform=from_bounds(*bounds,256,256), dst_crs='EPSG:3857',
+                              resampling=Resampling.nearest, src_alpha=4, dst_alpha=4)
+                    Image.fromarray(np.moveaxis(dst,0,-1)).save(folder / f'{y}.png')
+                    count += 1
+    return count
 
 if __name__ == '__main__':
     meta = read_metadata(DATA / 'scene')
