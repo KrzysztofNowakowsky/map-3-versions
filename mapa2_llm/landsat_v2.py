@@ -152,6 +152,26 @@ def index_rgba(array: np.ndarray, name: str) -> np.ndarray:
     rgba = matplotlib.colormaps[CMAPS[name]](np.clip((array + 1) / 2, 0, 1), bytes=True)
     rgba[..., 3] = np.isfinite(array) * 255
     return rgba
+    
+def write_geotiff(path: Path, data: np.ndarray, profile: dict, rgba=False):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    p = profile.copy()
+    if rgba:
+        data = np.moveaxis(data, -1, 0)
+        p.update(count=4, dtype='uint8', nodata=None, photometric='RGB')
+    else:
+        data = np.where(np.isfinite(data), data, -9999).astype('float32')[None]
+        p.update(count=1, dtype='float32', nodata=-9999)
+        p.pop('photometric', None)
+    p.update(driver='GTiff', compress='deflate', tiled=True)
+    with rasterio.open(path, 'w', **p) as dst:
+        dst.write(data)
+        if rgba:
+            dst.colorinterp = (ColorInterp.red, ColorInterp.green, ColorInterp.blue, ColorInterp.alpha)
+        else:
+            dst.set_band_description(1, path.stem)
+            dst.update_tags(meaning='normalized difference; no numeric clipping; NoData=-9999')
+
 
 
 if __name__ == '__main__':
