@@ -1,0 +1,3 @@
+# mapa 3 - oprócz zależności z mapa2_llm/requirements.txt
+earthengine-api
+requests
