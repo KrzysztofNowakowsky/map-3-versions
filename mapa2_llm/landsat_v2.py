@@ -199,6 +199,34 @@ def xyz_tiles(rgba_tif: Path, target: Path, minzoom=9, maxzoom=12) -> int:
                     count += 1
     return count
 
+def make_figures(scene: dict, indices: dict, out: Path):
+    out.mkdir(parents=True, exist_ok=True)
+    plt.rcParams.update({'font.size':12,'axes.titlesize':15,'figure.facecolor':'white'})
+    extent = array_bounds(scene['profile']['height'], scene['profile']['width'], scene['profile']['transform'])
+    west,south,east,north=extent
+    extent_km=[west/1000,east/1000,south/1000,north/1000]
+    def plot(a, title, name, cmap=None, limits=None, label=None):
+        fig,ax=plt.subplots(figsize=(8.8,6.2),layout='constrained')
+        im=ax.imshow(a,extent=extent_km,cmap=cmap,**({'vmin':limits[0],'vmax':limits[1]} if limits else {}))
+        ax.set(title=title,xlabel='Easting [km], EPSG:32634',ylabel='Northing [km]')
+        if cmap: fig.colorbar(im,ax=ax,shrink=.8,label=label or '')
+        fig.savefig(out/name,dpi=155)
+        plt.close(fig)
+    plot(stretch_rgb(scene['reflectance']), 'Landsat 8 • RGB (4/3/2) • 2013-08-07','rgb.png')
+    a=scene['raw']['sr_band5'].astype(float)
+    a[a == scene['metadata']['bands']['sr_band5']['fill']]=np.nan
+    plot(a,'Kanał B5 przed maskowaniem','band5_dn.png','gray',(0,6000),'DN')
+    plot(scene['reflectance'][5],'B5: reflektancja po masce jakości i granicy','band5_masked.png','gray',(0,.6),'Reflektancja')
+    quality=np.where(~scene['inside'],np.nan,np.where(scene['valid'],1,0))
+    plot(quality,'Maska: 1 = ważny piksel, 0 = odrzucony','quality.png','RdYlGn',(0,1),'Ważność')
+    for name,a in indices.items():
+        plot(a,f'{name} • 2013-08-07',name.lower()+'.png',CMAPS[name],(-1,1),'Wartość wskaźnika')
+    fig,axs=plt.subplots(1,3,figsize=(12.5,3.8),layout='constrained')
+    for ax,(name,a) in zip(axs,indices.items()):
+        ax.hist(a[np.isfinite(a)],bins=60,range=(-1,1),color='#167f83')
+        ax.set(title=name,xlabel='Wartość',ylabel='Liczba pikseli')
+    fig.savefig(out/'histograms.png',dpi=155); plt.close(fig)
+
 if __name__ == '__main__':
     meta = read_metadata(DATA / 'scene')
     print(meta['product'], meta['date'])
