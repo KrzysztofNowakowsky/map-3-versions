@@ -7,7 +7,7 @@
 #   blok 4-7  Mikołaj   - podgląd kanału (show_band, show_band2) + przycięcie do granicy powiatu (clip_area)
 #   blok 8-10 Krzysiek  - wskaźniki, zapis NDVI.tif, komendy GDAL
 
-# Blok 1: importy
+# %% Blok 1: importy
 import os
 import matplotlib.pyplot as plt
 import numpy as np
@@ -16,13 +16,13 @@ import rasterio.mask as rmask
 import fiona as fio
 
 # folder z kanałami LC08 (u mnie symlink do paczki NASA, ustaw swoją ścieżkę jeśli trzeba)
-LC08_DIR = os.path.join('..', 'data', 'Landsat8', 'LC08')
+LC08_DIR = os.path.join('..', 'data', 'Landsat8', 'LC08','')
 VECTOR = os.path.join('..', 'data', 'Landsat8', 'vector', 'krakow_krakowskie.shp')
 
 
 
 
-#  Blok 2: lista kanałów
+# %% Blok 2: lista kanałów
 def read_landsat_images(folder_name):
     """Zwraca słownik {nr kanału: ścieżka do pliku} dla kanałów 1-7."""
     file_list = os.listdir(folder_name)
@@ -39,7 +39,7 @@ def read_landsat_images(folder_name):
 
 
 
-# Blok 3: sprawdzenie
+# %% Blok 3: sprawdzenie
 satellite_images = read_landsat_images(LC08_DIR)
 for band in satellite_images:
     print(band, os.path.basename(satellite_images[band]))
@@ -124,19 +124,33 @@ with rio.open(clipped_bands[5], 'r') as src:
 show_band(band_matrix)
 # clipped_bands -> dalej używa Krzysiek do wskaźników (blok 8-10)
 
-# %% Blok 8 - odczytywanie zdjec z lansdata
-def read_landsat_images(folder_name):
-    file_list = os.listdir(folder_name)
-    channel_list = []
-    for f in file_list:
-        if (f.startswith('LC') and f.endswith('.tif')):
-            if 'band' in f:
-                channel_list.append(folder_name + f)
-    channel_list.sort()
-    channel_numbers = np.arange(1, 8)
-    bands_dictionary = dict(zip(channel_numbers, channel_list))
-    return bands_dictionary
+# %% Blok 8 NDVI Obliczenia
+def calculate_index(index_name, landsat_8_bands):
+    indexes = {
+        'ndvi': (5, 4),
+        'ndbi': (6, 5),
+        'ndwi': (3, 6),
+    }
 
-satellite_images = read_landsat_images(LC08_DIR)
+    # Magiczne 10000 przez które dzielone są piksele poszczególnych obrazów
+    # to maksymalna wartość pikseli w produktach poziomu 2 satelity Landsat 8
 
-# %%
+    if index_name in indexes:
+        bands = indexes[index_name]
+
+        with rio.open(landsat_8_bands[bands[0]]) as a:
+            band_a = (a.read()[0] / 10000).astype(float)
+        with rio.open(landsat_8_bands[bands[1]]) as b:
+            band_b = (b.read()[0] / 10000).astype(float)
+
+        numerator = band_a - band_b
+        denominator = band_a + band_b
+
+        idx = numerator / denominator
+        idx[idx > 1] = 1
+        idx[idx < -1] = -1
+        return idx
+    else:
+        raise ValueError('Brak wskaźnika do wyboru, dostępne wskaźniki to ndbi, ndvi i ndwi')
+
+
