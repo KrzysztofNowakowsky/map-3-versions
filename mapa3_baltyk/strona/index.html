@@ -75,7 +75,8 @@ function pokaz() {
   document.querySelector('#szczegoly').textContent =
     `Widoczne (bez chmur): ${s.wazne_pct}% zatoki` + (s.mci_mediana === null
       ? ' • za mało czystej wody, by liczyć zakwit' : ` • mediana MCI: ${s.mci_mediana}`)
-    + (s.uzupelnione_z ? ` • Zatoka Pucka uzupełniona z dnia ${s.uzupelnione_z} (tego dnia satelita jej nie objął)` : '');
+    + (s.uzupelnione_z ? ` • Zatoka Pucka uzupełniona z dnia ${s.uzupelnione_z} (tego dnia satelita jej nie objął)` : '')
+    + (s.chmury_uzupelnione_pct > 0 ? ` • ${s.chmury_uzupelnione_pct}% zatoki spod chmur uzupełniono z dni: ${s.chmury_z.join(', ')} (przygaszone kolory; % zakwitu liczony tylko z tego dnia)` : '');
 }
 
 fetch('sceny.json').then(r => r.json()).then(cfg => {

@@ -29,6 +29,8 @@ PROG_ZAKWITU = 30          # MCI x10000 > 30 = zakwit (próg z pracy o Jeziorze 
 MIN_WAZNYCH_PCT = 30       # poniżej tego % czystej wody nie podajemy % zakwitu (zostają resztki chmur)
 MIN_POKRYCIA_STRONY = 65   # na stronę tylko daty z >= 65% czystej wody (60-65% = rozproszone chmury, szum MCI, np. 28.09.2019)
 MAX_DNI_UZUPELNIENIA = 4   # dziurę po przelocie 9:50 (Zatoka Pucka) bierzemy z przelotu +-4 dni
+MAX_DNI_CHMURY = 3         # na MAPIE miejsca pod chmurami bierzemy z najbliższych czystych dni (+-3)
+ALFA_UZUPELNIONE = 150     # piksele z innego dnia rysujemy przygaszone (255 = pełne)
 ZOOM_MIN, ZOOM_MAX = 9, 11  # 11 ~ 40 m/piksel; zawirowania mają km, a strona mieści się na serwerze
 SCL_WODA = [6]              # tylko czysta woda
 SCL_CHMURY = [3, 8, 9, 10]  # cień chmur, chmury średnie i wysokie, cirrus (zawyża MCI - sprawdzone na 33 scenach)
@@ -116,6 +118,21 @@ def znajdz_dawce(data, sceny, w_wielokacie):
     return min(kandydaci)[2] if kandydaci else None
 
 
+def uzupelnij_chmury(wartosc, dawcy):
+    """Tylko do MAPY: tam, gdzie dzień nie ma czystej wody (NaN), wstawia MCI z dawców
+    (lista tablic od najbliższego dnia). Statystyki liczymy wcześniej, z samego dnia.
+    Zwraca (uzupełnione MCI, maska pikseli wziętych od dawców, ile pikseli dał każdy dawca)."""
+    wynik = wartosc.copy()
+    z_dawcow = np.zeros(wartosc.shape, bool)
+    wklad = []
+    for dawca in dawcy:
+        brak = np.isnan(wynik) & np.isfinite(dawca)
+        wynik[brak] = dawca[brak]
+        z_dawcow |= brak
+        wklad.append(int(brak.sum()))
+    return wynik, z_dawcow, wklad
+
+
 def maska_morza(lista_scl, min_udzial=0.2):
     """Stała maska morza: piksel, który był wodą (SCL=6) w >= 20% scen. Odcina ląd pod cirrusem."""
     woda = np.mean([scl == 6 for scl in lista_scl], axis=0)
@@ -160,10 +177,12 @@ def zmniejsz_kafelki(folder):
         wynik.save(png, transparency=255)   # bez optimize - przenumerowałoby paletę
 
 
-def koloruj_mci(wartosc):
+def koloruj_mci(wartosc, przygaszone=None):
     t = np.clip((wartosc - MCI_OD) / (MCI_DO - MCI_OD), 0, 1)
     rgba = SKALA_MCI(np.nan_to_num(t), bytes=True)
     rgba[..., 3] = np.isfinite(wartosc) * 255
+    if przygaszone is not None:
+        rgba[..., 3][przygaszone] = ALFA_UZUPELNIONE
     return rgba
 
 
@@ -187,25 +206,40 @@ def main():
     tmp = TU / 'dane' / 'tmp'
     tmp.mkdir(parents=True, exist_ok=True)
     wyniki, wszystkie = [], []
+    mci_dnia, tci_dnia = {}, {}
+    # 1. przejście: MCI i statystyki z samego dnia (+ Zatoka Pucka z najbliższego przelotu)
     for data, (pasma, profil, _) in sceny.items():
         dawca = znajdz_dawce(data, sceny, w_wielokacie)
         if dawca:
             pasma, ile = uzupelnij_luke(pasma, sceny[dawca][0])
         ok = wazne_piksele(pasma['SCL'], morze)
         b4, b5, b6 = (pasma[b].astype('float32') for b in ['B04', 'B05', 'B06'])
-        wartosc = np.where(ok, mci(b4, b5, b6), np.nan)
-        stat = {'data': data, **statystyki(wartosc, int(ok.sum()), ile_morza), 'uzupelnione_z': dawca}
+        mci_dnia[data] = np.where(ok, mci(b4, b5, b6), np.nan).astype('float32')
+        tci_dnia[data] = pasma['TCI']
+        stat = {'data': data, **statystyki(mci_dnia[data], int(ok.sum()), ile_morza), 'uzupelnione_z': dawca}
         wszystkie.append(stat)
         if stat['wazne_pct'] < MIN_POKRYCIA_STRONY:
             print(data, 'pominięta na stronie - czystej wody tylko', stat['wazne_pct'], '%')
             continue
         wyniki.append(stat)
+
+    # 2. przejście (tylko mapa): dziury po chmurach z najbliższych czystych dni, także tych spoza strony
+    from datetime import date
+    for stat in wyniki:
+        data = stat['data']
+        dzien = date.fromisoformat(data)
+        blisko = sorted((abs((date.fromisoformat(d) - dzien).days), d) for d in mci_dnia if d != data)
+        dawcy = [d for dni, d in blisko if dni <= MAX_DNI_CHMURY]
+        wartosc, z_dawcow, wklad = uzupelnij_chmury(mci_dnia[data], [mci_dnia[d] for d in dawcy])
+        stat['chmury_uzupelnione_pct'] = round(100 * int((z_dawcow & morze).sum()) / ile_morza, 1)
+        stat['chmury_z'] = [d for d, ile in zip(dawcy, wklad) if ile > 0]
         print(data, stat)
 
-        zapisz_rgba(tmp / 'mci.tif', koloruj_mci(wartosc), profil)
+        profil = sceny[data][1]
+        zapisz_rgba(tmp / 'mci.tif', koloruj_mci(wartosc, przygaszone=z_dawcow), profil)
         xyz_tiles(tmp / 'mci.tif', SITE / 'kafelki' / 'mci' / data, ZOOM_MIN, ZOOM_MAX)
         zmniejsz_kafelki(SITE / 'kafelki' / 'mci' / data)
-        tci = np.moveaxis(pasma['TCI'], 0, -1)
+        tci = np.moveaxis(tci_dnia[data], 0, -1)
         alfa = (tci.max(axis=-1) > 0).astype('uint8') * 255
         zapisz_rgba(tmp / 'rgb.tif', np.dstack([tci, alfa]), profil)
         xyz_tiles(tmp / 'rgb.tif', SITE / 'kafelki' / 'rgb' / data, ZOOM_MIN, ZOOM_MAX)

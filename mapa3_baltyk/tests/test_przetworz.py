@@ -8,7 +8,7 @@ import numpy as np
 from PIL import Image
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from przetworz import mci, poszerz, maska_morza, wazne_piksele, statystyki, zmniejsz_kafelki, uzupelnij_luke
+from przetworz import mci, poszerz, maska_morza, wazne_piksele, statystyki, zmniejsz_kafelki, uzupelnij_luke, uzupelnij_chmury, koloruj_mci
 
 
 class MciTests(unittest.TestCase):
@@ -66,6 +66,24 @@ class UzupelnianieTests(unittest.TestCase):
         self.assertEqual(nowe['B05'][0, 1], 10)  # własne dane zostają
         self.assertEqual(nowe['SCL'][1, 0], 9)   # chmura dawcy dalej jest chmurą
         self.assertEqual(cel['B05'][0, 0], 10)   # oryginał nieruszony
+
+
+class ChmuryTests(unittest.TestCase):
+    def test_najblizszy_dawca_ma_pierwszenstwo(self):
+        nan = np.nan
+        dzien = np.array([[10.0, nan, nan]])            # 2 piksele pod chmurą
+        blizszy = np.array([[99.0, 40.0, nan]])          # zna środkowy
+        dalszy = np.array([[99.0, 70.0, 50.0]])          # zna oba
+        wynik, z_dawcow, wklad = uzupelnij_chmury(dzien, [blizszy, dalszy])
+        np.testing.assert_array_equal(wynik, [[10.0, 40.0, 50.0]])  # własna wartość nietknięta
+        self.assertEqual(wklad, [1, 1])
+        self.assertEqual(z_dawcow.tolist(), [[False, True, True]])
+        self.assertTrue(np.isnan(dzien[0, 1]))                      # oryginał bez zmian
+
+    def test_uzupelnione_przygaszone_na_mapie(self):
+        rgba = koloruj_mci(np.array([[20.0, 20.0]]), przygaszone=np.array([[False, True]]))
+        self.assertEqual(int(rgba[0, 0, 3]), 255)
+        self.assertLess(int(rgba[0, 1, 3]), 255)
 
 
 class KafelkiTests(unittest.TestCase):
