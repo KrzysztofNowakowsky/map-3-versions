@@ -13,12 +13,21 @@ from __future__ import annotations
 import json
 import xml.etree.ElementTree as ET
 from pathlib import Path
-
+import argparse
+import json
+import time
+import math
+import shutil
 import matplotlib
 import numpy as np
 import rasterio
 from rasterio.features import geometry_mask
-from rasterio.warp import transform_geom
+from rasterio.enums import ColorInterp, Resampling
+from rasterio.transform import from_bounds, array_bounds
+from rasterio.warp import transform_geom, transform_bounds, reproject
+from PIL import Image
+import matplotlib
+import matplotlib.pyplot as plt
 
 ROOT = Path(__file__).resolve().parent
 DATA = ROOT.parent / 'data' / 'LABOLATORIUM' / 'data'   # scene/ + aoi.geojson
@@ -153,8 +162,123 @@ def index_rgba(array: np.ndarray, name: str) -> np.ndarray:
     rgba[..., 3] = np.isfinite(array) * 255
     return rgba
 
+def write_geotiff(path: Path, data: np.ndarray, profile: dict, rgba=False):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    p = profile.copy()
+    if rgba:
+        data = np.moveaxis(data, -1, 0)
+        p.update(count=4, dtype='uint8', nodata=None, photometric='RGB')
+    else:
+        data = np.where(np.isfinite(data), data, -9999).astype('float32')[None]
+        p.update(count=1, dtype='float32', nodata=-9999)
+        p.pop('photometric', None)
+    p.update(driver='GTiff', compress='deflate', tiled=True)
+    with rasterio.open(path, 'w', **p) as dst:
+        dst.write(data)
+        if rgba:
+            dst.colorinterp = (ColorInterp.red, ColorInterp.green, ColorInterp.blue, ColorInterp.alpha)
+        else:
+            dst.set_band_description(1, path.stem)
+            dst.update_tags(meaning='normalized difference; no numeric clipping; NoData=-9999')
+
+def xyz_tiles(rgba_tif: Path, target: Path, minzoom=9, maxzoom=12) -> int:
+    """Kafelki XYZ 256 px w EPSG:3857. Oś y rośnie na południe (tms=False)."""
+    if not 0 <= minzoom <= maxzoom <= 15:
+        raise ValueError('W ćwiczeniu dozwolone 0 <= minzoom <= maxzoom <= 15.')
+    radius = 20037508.342789244
+    count = 0
+    with rasterio.open(rgba_tif) as src:
+        west, south, east, north = transform_bounds(src.crs, 'EPSG:3857', *src.bounds, densify_pts=21)
+        for z in range(minzoom, maxzoom + 1):
+            n = 2 ** z
+            span = 2 * radius / n
+            x0, x1 = max(0, math.floor((west + radius) / span)), min(n-1, math.floor((east + radius) / span))
+            y0, y1 = max(0, math.floor((radius - north) / span)), min(n-1, math.floor((radius - south) / span))
+            for x in range(x0, x1 + 1):
+                folder = target / str(z) / str(x)
+                folder.mkdir(parents=True, exist_ok=True)
+                for y in range(y0, y1 + 1):
+                    dst = np.zeros((4, 256, 256), dtype='uint8')
+                    bounds = (x*span-radius, radius-(y+1)*span, (x+1)*span-radius, radius-y*span)
+                    reproject(source=rasterio.band(src, [1,2,3,4]), destination=dst,
+                              src_transform=src.transform, src_crs=src.crs,
+                              dst_transform=from_bounds(*bounds,256,256), dst_crs='EPSG:3857',
+                              resampling=Resampling.nearest, src_alpha=4, dst_alpha=4)
+                    Image.fromarray(np.moveaxis(dst,0,-1)).save(folder / f'{y}.png')
+                    count += 1
+    return count
+
+def make_figures(scene: dict, indices: dict, out: Path):
+    out.mkdir(parents=True, exist_ok=True)
+    plt.rcParams.update({'font.size':12,'axes.titlesize':15,'figure.facecolor':'white'})
+    extent = array_bounds(scene['profile']['height'], scene['profile']['width'], scene['profile']['transform'])
+    west,south,east,north=extent
+    extent_km=[west/1000,east/1000,south/1000,north/1000]
+    def plot(a, title, name, cmap=None, limits=None, label=None):
+        fig,ax=plt.subplots(figsize=(8.8,6.2),layout='constrained')
+        im=ax.imshow(a,extent=extent_km,cmap=cmap,**({'vmin':limits[0],'vmax':limits[1]} if limits else {}))
+        ax.set(title=title,xlabel='Easting [km], EPSG:32634',ylabel='Northing [km]')
+        if cmap: fig.colorbar(im,ax=ax,shrink=.8,label=label or '')
+        fig.savefig(out/name,dpi=155)
+        plt.close(fig)
+    plot(stretch_rgb(scene['reflectance']), 'Landsat 8 • RGB (4/3/2) • 2013-08-07','rgb.png')
+    a=scene['raw']['sr_band5'].astype(float)
+    a[a == scene['metadata']['bands']['sr_band5']['fill']]=np.nan
+    plot(a,'Kanał B5 przed maskowaniem','band5_dn.png','gray',(0,6000),'DN')
+    plot(scene['reflectance'][5],'B5: reflektancja po masce jakości i granicy','band5_masked.png','gray',(0,.6),'Reflektancja')
+    quality=np.where(~scene['inside'],np.nan,np.where(scene['valid'],1,0))
+    plot(quality,'Maska: 1 = ważny piksel, 0 = odrzucony','quality.png','RdYlGn',(0,1),'Ważność')
+    for name,a in indices.items():
+        plot(a,f'{name} • 2013-08-07',name.lower()+'.png',CMAPS[name],(-1,1),'Wartość wskaźnika')
+    fig,axs=plt.subplots(1,3,figsize=(12.5,3.8),layout='constrained')
+    for ax,(name,a) in zip(axs,indices.items()):
+        ax.hist(a[np.isfinite(a)],bins=60,range=(-1,1),color='#167f83')
+        ax.set(title=name,xlabel='Wartość',ylabel='Liczba pikseli')
+    fig.savefig(out/'histograms.png',dpi=155); plt.close(fig)
+
+def export_results(scene: dict, indices: dict, output_dir: Path = ROOT/'outputs', minzoom=9, maxzoom=12) -> dict:
+    start=time.perf_counter()
+    output_dir=Path(output_dir)
+    raster_dir,figure_dir,site=output_dir/'rasters',output_dir/'figures',output_dir/'site'
+    for p in [raster_dir,figure_dir,site]: p.mkdir(parents=True,exist_ok=True)
+    summary={'product':scene['metadata']['product'],'date':scene['metadata']['date'],
+             'shape':[scene['profile']['height'],scene['profile']['width']],
+             'crs':str(scene['profile']['crs']),'inside_pixels':int(scene['inside'].sum()),
+             'valid_pixels':int(scene['valid'].sum()),'indices':{},'tiles':{},
+             'minzoom':minzoom,'maxzoom':maxzoom}
+    for name,a in indices.items():
+        finite=a[np.isfinite(a)]
+        summary['indices'][name]={'count':int(finite.size),'min':float(finite.min()),'max':float(finite.max()),
+            'mean':float(finite.mean()),'median':float(np.median(finite)),
+            'outside_minus1_plus1':int((np.abs(finite)>1).sum())}
+        write_geotiff(raster_dir/f'{name}.tif',a,scene['profile'])
+    layers={'RGB':stretch_rgb(scene['reflectance']),**{name:index_rgba(a,name) for name,a in indices.items()}}
+    for name,rgba in layers.items():
+        p=raster_dir/f'{name}_display.tif'
+        write_geotiff(p,rgba,scene['profile'],rgba=True)
+        # Zakres zoomów jest zapisany w mapie; istniejące pliki innych zoomów są ignorowane.
+        summary['tiles'][name]=xyz_tiles(p,site/'tiles'/name,minzoom,maxzoom)
+    make_figures(scene,indices,figure_dir)
+    shutil.copytree(Path(__file__).parent/'vendor',site/'vendor',dirs_exist_ok=True)
+    (site/'aoi.geojson').write_text(json.dumps(scene['aoi']),encoding='utf-8')
+    bounds=array_bounds(scene['profile']['height'],scene['profile']['width'],scene['profile']['transform'])
+    w,s,e,n=transform_bounds(scene['profile']['crs'],'EPSG:4326',*bounds)
+    config={'bounds':[[s,w],[n,e]],'minzoom':minzoom,'maxzoom':maxzoom,'date':summary['date'],
+            'ramps':{name:['#'+''.join(f'{v:02x}' for v in matplotlib.colormaps[CMAPS[name]](float(t),bytes=True)[:3]) for t in np.linspace(0,1,9)] for name in indices}}
+    template=(Path(__file__).parent/'map_template.html').read_text(encoding='utf-8')
+    (site/'index.html').write_text(template.replace('__MAP_CONFIG__',json.dumps(config)),encoding='utf-8')
+    summary['export_seconds']=round(time.perf_counter()-start,2)
+    (output_dir/'summary.json').write_text(json.dumps(summary,indent=2,ensure_ascii=False),encoding='utf-8')
+    (site/'summary.json').write_text(json.dumps(summary,indent=2,ensure_ascii=False),encoding='utf-8')
+    return summary
 
 if __name__ == '__main__':
+    parser=argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--data',type=Path,default=ROOT/'data')
+    parser.add_argument('--output',type=Path,default=ROOT/'outputs')
+    parser.add_argument('--minzoom',type=int,default=9)
+    parser.add_argument('--maxzoom',type=int,default=12)
+    args=parser.parse_args()
     meta = read_metadata(DATA / 'scene')
     print(meta['product'], meta['date'])
     print('kanały w XML:', len(meta['bands']), '| skala B5:', meta['bands']['sr_band5']['scale'])
@@ -162,3 +286,6 @@ if __name__ == '__main__':
     indices = calculate_indices(scene['reflectance'])
     print('ważne piksele:', int(scene['valid'].sum()), '(wzorzec: 1729266)')
     print('NDVI średnio:', round(float(np.nanmean(indices['NDVI'])), 3), '(wzorzec: 0.618)')
+    result=export_results(scene,calculate_indices(scene['reflectance']),args.output,args.minzoom,args.maxzoom)
+    print(json.dumps(result,ensure_ascii=False,indent=2))
+    print('Podgląd: python -m http.server 8000 --bind 127.0.0.1 --directory '+str(args.output/'site'))
