@@ -153,4 +153,54 @@ def calculate_index(index_name, landsat_8_bands):
     else:
         raise ValueError('Brak wskaźnika do wyboru, dostępne wskaźniki to ndbi, ndvi i ndwi')
 
+ndvi = calculate_index('ndvi', clipped_bands)
+ndvi[ndvi == 0] = -1
+show_band2(ndvi, color_map='viridis', remove_negative=True)
 
+ndwi = calculate_index('ndwi', clipped_bands)
+ndwi[ndwi == 0] = np.nan
+show_band2(ndwi, color_map='viridis', remove_negative=False)
+
+ndbi = calculate_index('ndbi', clipped_bands)
+ndbi[ndbi == 0] = np.nan
+show_band2(ndbi, color_map='viridis', remove_negative=False)
+
+show_band2(ndbi - ndvi, color_map='viridis', remove_negative=False)
+
+# %% Blok 9 Eksport do TIF 
+
+OUTPUT_DIR = 'output'
+os.makedirs(OUTPUT_DIR, exist_ok=True)
+
+# Pobieramy metadane z jednego z przyciętych kanałów.
+# Wszystkie kanały zostały przycięte w ten sam sposób,
+# więc mają ten sam rozmiar, transformację i układ współrzędnych.
+with rio.open(clipped_bands[5]) as src:
+    metadata = src.meta.copy()
+
+# Wskaźniki do zapisania
+indices = {
+    'NDVI': ndvi,
+    'NDWI': ndwi,
+    'NDBI': ndbi
+}
+
+# Aktualizacja metadanych:
+# wskaźniki są typu float32 i mają jedną warstwę (band)
+metadata.update({
+    'driver': 'GTiff',
+    'count': 1,
+    'dtype': 'float32',
+    'nodata': np.nan
+})
+
+for name, index in indices.items():
+    output_file = os.path.join(OUTPUT_DIR, name + '.tif')
+
+    with rio.open(output_file, 'w', **metadata) as dst:
+        dst.write(index.astype('float32'), 1)
+
+    print('Zapisano:', output_file)
+
+print('Eksport wskaźników zakończony.')
+# %%
