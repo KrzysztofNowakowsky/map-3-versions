@@ -227,6 +227,42 @@ def make_figures(scene: dict, indices: dict, out: Path):
         ax.set(title=name,xlabel='Wartość',ylabel='Liczba pikseli')
     fig.savefig(out/'histograms.png',dpi=155); plt.close(fig)
 
+def export_results(scene: dict, indices: dict, output_dir: Path = ROOT/'outputs', minzoom=9, maxzoom=12) -> dict:
+    start=time.perf_counter()
+    output_dir=Path(output_dir)
+    raster_dir,figure_dir,site=output_dir/'rasters',output_dir/'figures',output_dir/'site'
+    for p in [raster_dir,figure_dir,site]: p.mkdir(parents=True,exist_ok=True)
+    summary={'product':scene['metadata']['product'],'date':scene['metadata']['date'],
+             'shape':[scene['profile']['height'],scene['profile']['width']],
+             'crs':str(scene['profile']['crs']),'inside_pixels':int(scene['inside'].sum()),
+             'valid_pixels':int(scene['valid'].sum()),'indices':{},'tiles':{},
+             'minzoom':minzoom,'maxzoom':maxzoom}
+    for name,a in indices.items():
+        finite=a[np.isfinite(a)]
+        summary['indices'][name]={'count':int(finite.size),'min':float(finite.min()),'max':float(finite.max()),
+            'mean':float(finite.mean()),'median':float(np.median(finite)),
+            'outside_minus1_plus1':int((np.abs(finite)>1).sum())}
+        write_geotiff(raster_dir/f'{name}.tif',a,scene['profile'])
+    layers={'RGB':stretch_rgb(scene['reflectance']),**{name:index_rgba(a,name) for name,a in indices.items()}}
+    for name,rgba in layers.items():
+        p=raster_dir/f'{name}_display.tif'
+        write_geotiff(p,rgba,scene['profile'],rgba=True)
+        # Zakres zoomów jest zapisany w mapie; istniejące pliki innych zoomów są ignorowane.
+        summary['tiles'][name]=xyz_tiles(p,site/'tiles'/name,minzoom,maxzoom)
+    make_figures(scene,indices,figure_dir)
+    shutil.copytree(Path(__file__).parent/'vendor',site/'vendor',dirs_exist_ok=True)
+    (site/'aoi.geojson').write_text(json.dumps(scene['aoi']),encoding='utf-8')
+    bounds=array_bounds(scene['profile']['height'],scene['profile']['width'],scene['profile']['transform'])
+    w,s,e,n=transform_bounds(scene['profile']['crs'],'EPSG:4326',*bounds)
+    config={'bounds':[[s,w],[n,e]],'minzoom':minzoom,'maxzoom':maxzoom,'date':summary['date'],
+            'ramps':{name:['#'+''.join(f'{v:02x}' for v in matplotlib.colormaps[CMAPS[name]](float(t),bytes=True)[:3]) for t in np.linspace(0,1,9)] for name in indices}}
+    template=(Path(__file__).parent/'map_template.html').read_text(encoding='utf-8')
+    (site/'index.html').write_text(template.replace('__MAP_CONFIG__',json.dumps(config)),encoding='utf-8')
+    summary['export_seconds']=round(time.perf_counter()-start,2)
+    (output_dir/'summary.json').write_text(json.dumps(summary,indent=2,ensure_ascii=False),encoding='utf-8')
+    (site/'summary.json').write_text(json.dumps(summary,indent=2,ensure_ascii=False),encoding='utf-8')
+    return summary
+
 if __name__ == '__main__':
     meta = read_metadata(DATA / 'scene')
     print(meta['product'], meta['date'])
