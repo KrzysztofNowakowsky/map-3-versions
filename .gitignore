@@ -1,5 +1,6 @@
 data.zip
 NASA.rar
+NASA
 
 # --- lokalne dane i wyniki (nie commitujemy, dane leżą w ../NASA) ---
 .venv/
@@ -19,6 +20,7 @@ mapa1_reczna/clipped/
 mapa1_reczna/site/
 mapa1_reczna/*.tif
 mapa2_llm/outputs/
+mapa1_reczna/output/
 # GDAL tworzy *.aux.xml obok rastrów
 *.aux.xml
 
