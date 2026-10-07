@@ -80,6 +80,9 @@ function pokaz() {
 
 fetch('sceny.json').then(r => r.json()).then(cfg => {
   sceny = cfg.sceny;
+  const tytul = `Sinice w Zatoce Gdańskiej • lato ${cfg.rok}`;
+  document.title = tytul;
+  document.querySelector('header h1').textContent = tytul;
   const wybor = document.querySelector('#data');
   sceny.forEach(s => wybor.add(new Option(
     `${s.data} (${s.zakwit_pct === null ? 'brak danych' : 'zakwit ' + s.zakwit_pct + '%'})`, s.data)));

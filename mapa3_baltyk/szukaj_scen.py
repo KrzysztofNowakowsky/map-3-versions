@@ -1,10 +1,10 @@
 """Mapa 3, krok 1: wybór scen Sentinel-2 nad Zatoką Gdańską (GEE służy TYLKO do wyszukania dat).
 
 Zapisuje:
-  sceny_2026.csv - wszystkie daty VI-IX 2026 z min. 50% morza w zatoce widocznego (bez chmur)
-  sceny_lata.csv - po 2 najlepsze daty ze szczytu sezonu (VII-VIII) dla lat 2017-2025
+  sceny_<rok>.csv - wszystkie daty VI-IX wybranego roku z min. 50% morza w zatoce widocznego (bez chmur)
+  sceny_lata.csv  - po 2 najlepsze daty ze szczytu sezonu (VII-VIII) dla pozostałych lat 2017-2026
 
-Uruchom: python szukaj_scen.py --projekt <id projektu GEE>
+Uruchom: python szukaj_scen.py --projekt <id projektu GEE> [--rok 2019]
 """
 import argparse
 import csv
@@ -54,16 +54,17 @@ def zapisz(sciezka, wiersze):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--projekt', required=True, help='id projektu Google Earth Engine')
+    parser.add_argument('--rok', type=int, default=2026, help='sezon pokazywany na mapie (domyślnie 2026)')
     args = parser.parse_args()
     ee.Initialize(project=args.projekt)
     geom = json.loads((TU / 'zatoka.geojson').read_text(encoding='utf-8'))['features'][0]['geometry']
     zatoka = ee.Geometry(geom)
 
-    sezon = [(d, w) for d, w in lista_dat(zatoka, '2026-06-01', '2026-10-01') if w >= MIN_WODY]
-    zapisz(TU / 'sceny_2026.csv', sezon)
+    sezon = [(d, w) for d, w in lista_dat(zatoka, f'{args.rok}-06-01', f'{args.rok}-10-01') if w >= MIN_WODY]
+    zapisz(TU / f'sceny_{args.rok}.csv', sezon)
 
     lata = []
-    for rok in range(2017, 2026):
+    for rok in [r for r in range(2017, 2027) if r != args.rok]:
         daty = [(d, w) for d, w in lista_dat(zatoka, f'{rok}-07-01', f'{rok}-09-01') if w >= MIN_WODY]
         lata += sorted(sorted(daty, key=lambda x: -x[1])[:2])
     zapisz(TU / 'sceny_lata.csv', lata)

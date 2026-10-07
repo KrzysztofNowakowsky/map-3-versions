@@ -1,10 +1,11 @@
 """Mapa 3, krok 3: przetwarzanie pobranych scen Sentinel-2 LOKALNIE -> MCI, statystyki, kafelki, strona.
 
-Wejście: dane/sceny_2026/<RRRR-MM-DD>/T34UCF_*_{B04,B05,B06,SCL,TCI}_20m.jp2 (z pobierz_sceny.py)
+Wejście: dane/sceny_<rok>/<RRRR-MM-DD>/T34UCF_*_{B04,B05,B06,SCL,TCI}_20m.jp2 (z pobierz_sceny.py)
 Wyjście: site/ (gotowa strona statyczna: index.html, kafelki, sceny.json) - nie commitujemy
 
-Uruchom: python przetworz.py
+Uruchom: python przetworz.py [--rok 2019]   (domyślnie 2026)
 """
+import argparse
 import json
 import shutil
 import sys
@@ -19,7 +20,6 @@ from PIL import Image
 from rasterio.windows import from_bounds
 
 TU = Path(__file__).resolve().parent
-DANE = TU / 'dane' / 'sceny_2026'
 SITE = TU / 'site'
 LABORATORIUM_SRC = TU.parent / 'data' / 'LABOLATORIUM' / 'src'   # kafelki XYZ + Leaflet z zajęć
 sys.path.insert(0, str(LABORATORIUM_SRC))
@@ -27,7 +27,7 @@ from landsat_lab import xyz_tiles   # noqa: E402
 
 PROG_ZAKWITU = 30          # MCI x10000 > 30 = zakwit (próg z pracy o Jeziorze Ełckim)
 MIN_WAZNYCH_PCT = 30       # poniżej tego % czystej wody nie podajemy % zakwitu (zostają resztki chmur)
-MIN_POKRYCIA_STRONY = 60   # na stronę trafiają tylko daty z >= 60% czystej wody w zatoce
+MIN_POKRYCIA_STRONY = 65   # na stronę tylko daty z >= 65% czystej wody (60-65% = rozproszone chmury, szum MCI, np. 28.09.2019)
 MAX_DNI_UZUPELNIENIA = 4   # dziurę po przelocie 9:50 (Zatoka Pucka) bierzemy z przelotu +-4 dni
 ZOOM_MIN, ZOOM_MAX = 9, 11  # 11 ~ 40 m/piksel; zawirowania mają km, a strona mieści się na serwerze
 SCL_WODA = [6]              # tylko czysta woda
@@ -168,6 +168,10 @@ def koloruj_mci(wartosc):
 
 
 def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--rok', type=int, default=2026, help='sezon do przetworzenia (domyślnie 2026)')
+    args = parser.parse_args()
+    DANE = TU / 'dane' / f'sceny_{args.rok}'
     zatoka = json.loads((TU / 'zatoka.geojson').read_text(encoding='utf-8'))
     geom = zatoka['features'][0]['geometry']
     foldery = sorted(p for p in DANE.iterdir() if p.is_dir())
@@ -213,7 +217,7 @@ def main():
     shutil.copy(TU / 'zatoka.geojson', SITE / 'zatoka.geojson')
     legenda = ['#' + ''.join(f'{c:02x}' for c in SKALA_MCI(t, bytes=True)[:3]) for t in np.linspace(0, 1, 7)]
     (SITE / 'sceny.json').write_text(json.dumps({
-        'sceny': wyniki, 'wszystkie_sceny': wszystkie, 'prog_zakwitu': PROG_ZAKWITU, 'zoom_min': ZOOM_MIN, 'zoom_max': ZOOM_MAX,
+        'rok': args.rok, 'sceny': wyniki, 'wszystkie_sceny': wszystkie, 'prog_zakwitu': PROG_ZAKWITU, 'zoom_min': ZOOM_MIN, 'zoom_max': ZOOM_MAX,
         'legenda': {'od': MCI_OD, 'do': MCI_DO, 'kolory': legenda}}, ensure_ascii=False, indent=1), encoding='utf-8')
     shutil.rmtree(tmp)
     print('na stronie', len(wyniki), 'z', len(wszystkie), 'dat ->', SITE)

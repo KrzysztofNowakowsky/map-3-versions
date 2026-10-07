@@ -1,12 +1,12 @@
 """Mapa 3, krok 2: pobranie scen Sentinel-2 L2A z Copernicus Data Space (oficjalne źródło ESA).
 
-Dla każdej daty z sceny_2026.csv i sceny_lata.csv pobiera z kafla 34UCF tylko potrzebne pliki 20 m:
+Dla każdej daty z sceny_<rok>.csv i sceny_lata.csv pobiera z kafla 34UCF tylko potrzebne pliki 20 m:
 B04, B05, B06 (do MCI), SCL (maska) i TCI (prawdziwe kolory) - ok. 125 MB na datę zamiast 1 GB.
 
 Konto: https://dataspace.copernicus.eu (darmowe). Login i hasło podajesz przy uruchomieniu
 (albo w zmiennych CDSE_USER / CDSE_PASSWORD) - nigdy nie wpisuj ich do kodu ani do gita.
 
-Uruchom:  python pobierz_sceny.py            (pobiera brakujące)
+Uruchom:  python pobierz_sceny.py [--rok 2019]  (pobiera brakujące; domyślnie rok 2026)
           python pobierz_sceny.py --sprawdz  (tylko szuka produktów, bez logowania i pobierania)
 """
 import argparse
@@ -85,9 +85,10 @@ def pobierz_plik(url, cel, token):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--sprawdz', action='store_true', help='tylko znajdź produkty, nic nie pobieraj')
+    parser.add_argument('--rok', type=int, default=2026, help='sezon pokazywany na mapie (domyślnie 2026)')
     args = parser.parse_args()
 
-    zadania = [('sceny_2026', d) for d in wczytaj_daty('sceny_2026.csv')]
+    zadania = [(f'sceny_{args.rok}', d) for d in wczytaj_daty(f'sceny_{args.rok}.csv')]
     zadania += [('sceny_lata', d) for d in wczytaj_daty('sceny_lata.csv')]
     print('dat do pobrania:', len(zadania))
 
