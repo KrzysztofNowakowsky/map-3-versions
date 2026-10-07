@@ -13,12 +13,21 @@ from __future__ import annotations
 import json
 import xml.etree.ElementTree as ET
 from pathlib import Path
-
+import argparse
+import json
+import time
+import math
+import shutil
 import matplotlib
 import numpy as np
 import rasterio
 from rasterio.features import geometry_mask
-from rasterio.warp import transform_geom
+from rasterio.enums import ColorInterp, Resampling
+from rasterio.transform import from_bounds, array_bounds
+from rasterio.warp import transform_geom, transform_bounds, reproject
+from PIL import Image
+import matplotlib
+import matplotlib.pyplot as plt
 
 ROOT = Path(__file__).resolve().parent
 DATA = ROOT.parent / 'data' / 'LABOLATORIUM' / 'data'   # scene/ + aoi.geojson
@@ -264,6 +273,12 @@ def export_results(scene: dict, indices: dict, output_dir: Path = ROOT/'outputs'
     return summary
 
 if __name__ == '__main__':
+    parser=argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--data',type=Path,default=ROOT/'data')
+    parser.add_argument('--output',type=Path,default=ROOT/'outputs')
+    parser.add_argument('--minzoom',type=int,default=9)
+    parser.add_argument('--maxzoom',type=int,default=12)
+    args=parser.parse_args()
     meta = read_metadata(DATA / 'scene')
     print(meta['product'], meta['date'])
     print('kanały w XML:', len(meta['bands']), '| skala B5:', meta['bands']['sr_band5']['scale'])
@@ -271,3 +286,6 @@ if __name__ == '__main__':
     indices = calculate_indices(scene['reflectance'])
     print('ważne piksele:', int(scene['valid'].sum()), '(wzorzec: 1729266)')
     print('NDVI średnio:', round(float(np.nanmean(indices['NDVI'])), 3), '(wzorzec: 0.618)')
+    result=export_results(scene,calculate_indices(scene['reflectance']),args.output,args.minzoom,args.maxzoom)
+    print(json.dumps(result,ensure_ascii=False,indent=2))
+    print('Podgląd: python -m http.server 8000 --bind 127.0.0.1 --directory '+str(args.output/'site'))
