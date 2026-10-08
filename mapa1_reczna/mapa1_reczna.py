@@ -14,6 +14,7 @@ import numpy as np
 import rasterio as rio
 import rasterio.mask as rmask
 import fiona as fio
+import subprocess
 
 # folder z kanałami LC08 (u mnie symlink do paczki NASA, ustaw swoją ścieżkę jeśli trzeba)
 LC08_DIR = os.path.join('..', 'data', 'Landsat8', 'LC08','')
@@ -154,7 +155,7 @@ def calculate_index(index_name, landsat_8_bands):
         raise ValueError('Brak wskaźnika do wyboru, dostępne wskaźniki to ndbi, ndvi i ndwi')
 
 ndvi = calculate_index('ndvi', clipped_bands)
-ndvi[ndvi == 0] = -1
+ndvi[ndvi == 0] = np.nan
 show_band2(ndvi, color_map='viridis', remove_negative=True)
 
 ndwi = calculate_index('ndwi', clipped_bands)
@@ -196,6 +197,8 @@ metadata.update({
 
 for name, index in indices.items():
     output_file = os.path.join(OUTPUT_DIR, name + '.tif')
+    output_file = index.copy()
+    output_file[np.isnan(output_file)] = -9999
 
     with rio.open(output_file, 'w', **metadata) as dst:
         dst.write(index.astype('float32'), 1)
@@ -203,4 +206,149 @@ for name, index in indices.items():
     print('Zapisano:', output_file)
 
 print('Eksport wskaźników zakończony.')
+# %% Blok 10 - GDAL2Tiles + Leaflet
 # %%
+
+result = subprocess.run([
+    'gdalwarp',
+    '-t_srs', 'EPSG:3857',
+    '-r', 'near',
+    '-of', 'GTiff',
+    'output/NDVI.tif',
+    'test_3857.tif'
+], capture_output=True, text=True)
+
+# %%
+subprocess.run([
+    'gdaldem',
+    'color-relief',
+    'test_3857.tif',
+    'ndvi_color.txt',
+    'NDVI_color.tif',
+    '-alpha'
+], check=True)
+# %%
+subprocess.run([
+    'python',
+    '-m',
+    'osgeo_utils.gdal2tiles',
+    '--xyz',
+    '-z', '8-14',
+    '-w', 'none',
+    '-a', '0',
+    'NDVI_color.tif',
+    'tiles_ndvi'
+], check=True)
+
+# %% Blok 11 - stworzenie HTML
+html = """
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <title>Mapy Landsat 8 - powiat krakowski</title>
+
+    <link
+        rel="stylesheet"
+        href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    />
+
+    <style>
+        html, body {
+            height: 100%;
+            margin: 0;
+        }
+
+        #map {
+            width: 100%;
+            height: 100%;
+        }
+    </style>
+</head>
+
+<body>
+
+<div id="map"></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<script>
+
+    // -------------------------
+    // Mapa
+    // -------------------------
+
+    const map = L.map('map').setView([50.0614, 19.9366], 10);
+
+
+    // -------------------------
+    // OSM
+    // -------------------------
+
+    const osm = L.tileLayer(
+        'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+        {
+            attribution: '&copy; OpenStreetMap contributors'
+        }
+    );
+
+
+    // -------------------------
+    // Puste tło
+    // -------------------------
+
+    const noBackground = L.layerGroup();
+
+
+    // -------------------------
+    // Warstwy rastrowe
+    // -------------------------
+
+    const ndvi = L.tileLayer(
+        'tiles_ndvi/{z}/{x}/{y}.png',
+        {
+            opacity: 0.7,
+            tms: false,
+            minZoom: 8,
+            maxZoom: 14
+        }
+    );
+
+
+    // Domyślne warstwy
+
+    osm.addTo(map);
+    ndvi.addTo(map);
+
+
+    // -------------------------
+    // Kontrola warstw
+    // -------------------------
+
+    const baseMaps = {
+        "OpenStreetMap": osm,
+        "Bez tła": noBackground
+    };
+
+    const overlayMaps = {
+        "NDVI": ndvi,
+    };
+
+    L.control.layers(
+        baseMaps,
+        overlayMaps,
+        {
+            collapsed: false
+        }
+    ).addTo(map);
+
+</script>
+
+</body>
+</html>
+"""
+
+with open('index.html', 'w', encoding='utf-8') as f:
+    f.write(html)
+
+print('Utworzono index.html')
