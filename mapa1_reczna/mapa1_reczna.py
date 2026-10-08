@@ -197,6 +197,8 @@ metadata.update({
 
 for name, index in indices.items():
     output_file = os.path.join(OUTPUT_DIR, name + '.tif')
+    output_file = index.copy()
+    output_file[np.isnan(output_file)] = -9999
 
     with rio.open(output_file, 'w', **metadata) as dst:
         dst.write(index.astype('float32'), 1)
@@ -205,92 +207,17 @@ for name, index in indices.items():
 
 print('Eksport wskaźników zakończony.')
 # %% Blok 10 - GDAL2Tiles + Leaflet
-
-TILES_DIR = 'tiles'
-os.makedirs(TILES_DIR, exist_ok=True)
-
-
-def create_tiles(input_tif, output_dir, color_file,
-                 zoom_min=8, zoom_max=14):
-
-    os.makedirs(output_dir, exist_ok=True)
-
-    temp_dir = 'temp_gdal'
-    os.makedirs(temp_dir, exist_ok=True)
-
-    name = os.path.splitext(os.path.basename(input_tif))[0]
-
-    # 1. Reprojekcja do Web Mercator
-    reproj_tif = os.path.join(
-        temp_dir,
-        name + '_3857.tif'
-    )
-
-    print('Reprojekcja:', input_tif)
-
-    subprocess.run([
-        'gdalwarp',
-        '-t_srs', 'EPSG:3857',
-        '-r', 'bilinear',
-        '-of', 'GTiff',
-        'output/NDVI.tif',
-        reproj_tif
-    ], check=True, capture_output=True)
-
-    # 2. Kolorowanie rastra
-    color_tif = os.path.join(
-        temp_dir,
-        name + '_color.tif'
-    )
-
-    print('Kolorowanie:', color_tif)
-
-    subprocess.run([
-        'gdaldem',
-        'color-relief',
-        reproj_tif,
-        color_file,
-        color_tif,
-        '-alpha'
-    ], check=True)
-
-    # 3. GDAL2Tiles
-    print('Tworzenie kafelków:', output_dir)
-
-    subprocess.run([
-        'python',
-        '-m',
-        'osgeo_utils.gdal2tiles',
-        '--xyz',
-        '-z', f'{zoom_min}-{zoom_max}',
-        '-w', 'none',
-        color_tif,
-        output_dir
-    ], check=True)
-
-    print('Kafelki gotowe:', output_dir)
-create_tiles(
-    'output/NDVI.tif',
-    'tiles/ndvi',
-    'ndvi_color.txt'
-)
 # %%
-import subprocess
 
 result = subprocess.run([
     'gdalwarp',
     '-t_srs', 'EPSG:3857',
-    '-r', 'bilinear',
+    '-r', 'near',
     '-of', 'GTiff',
     'output/NDVI.tif',
     'test_3857.tif'
 ], capture_output=True, text=True)
 
-print("KOD:", result.returncode)
-print("STDOUT:")
-print(result.stdout)
-print("STDERR:")
-print(result.stderr)
 # %%
 subprocess.run([
     'gdaldem',
@@ -308,8 +235,120 @@ subprocess.run([
     '--xyz',
     '-z', '8-14',
     '-w', 'none',
+    '-a', '0',
     'NDVI_color.tif',
     'tiles_ndvi'
 ], check=True)
 
-# %%
+# %% Blok 11 - stworzenie HTML
+html = """
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <title>Mapy Landsat 8 - powiat krakowski</title>
+
+    <link
+        rel="stylesheet"
+        href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    />
+
+    <style>
+        html, body {
+            height: 100%;
+            margin: 0;
+        }
+
+        #map {
+            width: 100%;
+            height: 100%;
+        }
+    </style>
+</head>
+
+<body>
+
+<div id="map"></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<script>
+
+    // -------------------------
+    // Mapa
+    // -------------------------
+
+    const map = L.map('map').setView([50.0614, 19.9366], 10);
+
+
+    // -------------------------
+    // OSM
+    // -------------------------
+
+    const osm = L.tileLayer(
+        'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+        {
+            attribution: '&copy; OpenStreetMap contributors'
+        }
+    );
+
+
+    // -------------------------
+    // Puste tło
+    // -------------------------
+
+    const noBackground = L.layerGroup();
+
+
+    // -------------------------
+    // Warstwy rastrowe
+    // -------------------------
+
+    const ndvi = L.tileLayer(
+        'tiles_ndvi/{z}/{x}/{y}.png',
+        {
+            opacity: 0.7,
+            tms: false,
+            minZoom: 8,
+            maxZoom: 14
+        }
+    );
+
+
+    // Domyślne warstwy
+
+    osm.addTo(map);
+    ndvi.addTo(map);
+
+
+    // -------------------------
+    // Kontrola warstw
+    // -------------------------
+
+    const baseMaps = {
+        "OpenStreetMap": osm,
+        "Bez tła": noBackground
+    };
+
+    const overlayMaps = {
+        "NDVI": ndvi,
+    };
+
+    L.control.layers(
+        baseMaps,
+        overlayMaps,
+        {
+            collapsed: false
+        }
+    ).addTo(map);
+
+</script>
+
+</body>
+</html>
+"""
+
+with open('index.html', 'w', encoding='utf-8') as f:
+    f.write(html)
+
+print('Utworzono index.html')
