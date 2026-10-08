@@ -14,6 +14,7 @@ import numpy as np
 import rasterio as rio
 import rasterio.mask as rmask
 import fiona as fio
+import subprocess
 
 # folder z kanałami LC08 (u mnie symlink do paczki NASA, ustaw swoją ścieżkę jeśli trzeba)
 LC08_DIR = os.path.join('..', 'data', 'Landsat8', 'LC08','')
@@ -154,7 +155,7 @@ def calculate_index(index_name, landsat_8_bands):
         raise ValueError('Brak wskaźnika do wyboru, dostępne wskaźniki to ndbi, ndvi i ndwi')
 
 ndvi = calculate_index('ndvi', clipped_bands)
-ndvi[ndvi == 0] = -1
+ndvi[ndvi == 0] = np.nan
 show_band2(ndvi, color_map='viridis', remove_negative=True)
 
 ndwi = calculate_index('ndwi', clipped_bands)
@@ -203,4 +204,112 @@ for name, index in indices.items():
     print('Zapisano:', output_file)
 
 print('Eksport wskaźników zakończony.')
+# %% Blok 10 - GDAL2Tiles + Leaflet
+
+TILES_DIR = 'tiles'
+os.makedirs(TILES_DIR, exist_ok=True)
+
+
+def create_tiles(input_tif, output_dir, color_file,
+                 zoom_min=8, zoom_max=14):
+
+    os.makedirs(output_dir, exist_ok=True)
+
+    temp_dir = 'temp_gdal'
+    os.makedirs(temp_dir, exist_ok=True)
+
+    name = os.path.splitext(os.path.basename(input_tif))[0]
+
+    # 1. Reprojekcja do Web Mercator
+    reproj_tif = os.path.join(
+        temp_dir,
+        name + '_3857.tif'
+    )
+
+    print('Reprojekcja:', input_tif)
+
+    subprocess.run([
+        'gdalwarp',
+        '-t_srs', 'EPSG:3857',
+        '-r', 'bilinear',
+        '-of', 'GTiff',
+        'output/NDVI.tif',
+        reproj_tif
+    ], check=True, capture_output=True)
+
+    # 2. Kolorowanie rastra
+    color_tif = os.path.join(
+        temp_dir,
+        name + '_color.tif'
+    )
+
+    print('Kolorowanie:', color_tif)
+
+    subprocess.run([
+        'gdaldem',
+        'color-relief',
+        reproj_tif,
+        color_file,
+        color_tif,
+        '-alpha'
+    ], check=True)
+
+    # 3. GDAL2Tiles
+    print('Tworzenie kafelków:', output_dir)
+
+    subprocess.run([
+        'python',
+        '-m',
+        'osgeo_utils.gdal2tiles',
+        '--xyz',
+        '-z', f'{zoom_min}-{zoom_max}',
+        '-w', 'none',
+        color_tif,
+        output_dir
+    ], check=True)
+
+    print('Kafelki gotowe:', output_dir)
+create_tiles(
+    'output/NDVI.tif',
+    'tiles/ndvi',
+    'ndvi_color.txt'
+)
+# %%
+import subprocess
+
+result = subprocess.run([
+    'gdalwarp',
+    '-t_srs', 'EPSG:3857',
+    '-r', 'bilinear',
+    '-of', 'GTiff',
+    'output/NDVI.tif',
+    'test_3857.tif'
+], capture_output=True, text=True)
+
+print("KOD:", result.returncode)
+print("STDOUT:")
+print(result.stdout)
+print("STDERR:")
+print(result.stderr)
+# %%
+subprocess.run([
+    'gdaldem',
+    'color-relief',
+    'test_3857.tif',
+    'ndvi_color.txt',
+    'NDVI_color.tif',
+    '-alpha'
+], check=True)
+# %%
+subprocess.run([
+    'python',
+    '-m',
+    'osgeo_utils.gdal2tiles',
+    '--xyz',
+    '-z', '8-14',
+    '-w', 'none',
+    'NDVI_color.tif',
+    'tiles_ndvi'
+], check=True)
+
 # %%
