@@ -1,11 +1,10 @@
 """Mapa 3: temperatura nad Zatoką Gdańską z Open-Meteo -> site/sst.json (do wykresów).
 
 Dwie serie, średnie dobowe, sezon VI-IX dla lat 2017-2026:
-  morze     - temperatura powierzchni morza, Open-Meteo Marine API (best_match).
-              Sprawdzone: archiwum ma ją dopiero od 2023 r. (2017-2022 = brak, a model era5_ocean
-              ma tylko fale), więc dla wcześniejszych lat seria jest pusta.
+  morze     - temperatura powierzchni morza, Open-Meteo Marine API; dane od 2023 r.
+              (era5_ocean ma tylko fale), dla wcześniejszych lat seria jest pusta
   powietrze - temperatura powietrza 2 m nad zatoką, archiwum Open-Meteo (ERA5, cell_selection=sea),
-              dostępna dla wszystkich lat - zastępstwo tam, gdzie brak temperatury morza.
+              wszystkie lata
 
 Uruchom: python sst.py   (bez konta i klucza; potrzebny internet)
 """
