@@ -1,8 +1,6 @@
-// Mapa 3: wykresy pod mapą (Chart.js). Dane z przetworz.py, sst.py i statystyki.py.
-//  1) sezon: % zakwitu w kolejnych scenach + temperatura morza (od 2023) i powietrza (sceny.json, sst.json)
-//  2) szczyt zakwitu rok po roku (lata.json + rok z mapy z sceny.json)
-// Brak pliku z danymi = wykres z komunikatem, reszta strony działa dalej.
-// Całość w (() => { ... })(), żeby nazwy nie zderzyły się z innymi skryptami strony (mapa.js, live.js).
+// Mapa 3: wykresy pod mapą (Chart.js), dane z sceny.json, sst.json i lata.json.
+//  1) sezon: % zakwitu + temperatura morza (od 2023) i powietrza
+//  2) szczyt zakwitu rok po roku
 
 (() => {
 const KOLOR_ZAKWIT = '#a50026';
@@ -22,7 +20,7 @@ function komunikat(id, tekst) {
 function wykresSezonu(cfg, temp) {
   const rok = String(cfg.rok);
   const sceny = (cfg.wszystkie_sceny || cfg.sceny).filter(s => s.zakwit_pct !== null);
-  // oś X: wszystkie dni sezonu z temperaturą powietrza (albo same daty scen, gdy brak sst.json)
+  // oś X: dni sezonu z sst.json, bez niego same daty scen
   const dni = temp ? Object.keys(temp.powietrze).filter(d => d.startsWith(rok)) : sceny.map(s => s.data);
   const zakwit = Object.fromEntries(sceny.map(s => [s.data, s.zakwit_pct]));
   const zbiory = [{
@@ -67,7 +65,7 @@ function wykresSezonu(cfg, temp) {
 
 function wykresLat(cfg, lata) {
   const rok = String(cfg.rok);
-  // rok z mapy liczymy z jego pełnego sezonu, pozostałe lata z 2 scen szczytu (lata.json)
+  // rok z mapy z całego sezonu, pozostałe lata z lata.json
   const szczyty = { ...lata.szczyty };
   const naMapie = (cfg.wszystkie_sceny || cfg.sceny).filter(s => s.zakwit_pct !== null);
   if (naMapie.length) {
@@ -95,10 +93,9 @@ function wykresLat(cfg, lata) {
       },
     },
   });
-  // uczciwość porównania: rok z mapy ma wszystkie sceny sezonu, pozostałe lata tylko po 2
   const opis = document.querySelector('#zrodlo-sst');
   opis.textContent += (opis.textContent ? ' ' : '') + `Wykres lat: ${rok} liczony ze wszystkich `
-    + `${naMapie.length} scen sezonu, pozostałe lata tylko z 2 scen ze szczytu sezonu (lipiec–sierpień), `
+    + `${naMapie.length} scen sezonu, pozostałe lata tylko z 2 scen ze szczytu sezonu (lipiec-sierpień), `
     + 'więc ich prawdziwy szczyt mógł być wyższy.';
 }
 

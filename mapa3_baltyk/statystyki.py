@@ -49,7 +49,7 @@ def main():
 
     sceny = {d: wczytaj(DANE / d, geom) for d in daty}
     w_wielokacie = next(iter(sceny.values()))[2]
-    # maska morza ze wszystkich scen porównawczych - ląd pod cirrusem nie wejdzie do statystyk
+    # wspólna maska morza dla wszystkich scen porównawczych
     morze = maska_morza([pasma['SCL'] for pasma, _, _ in sceny.values()]) & w_wielokacie
     ile_morza = int(morze.sum())
 
