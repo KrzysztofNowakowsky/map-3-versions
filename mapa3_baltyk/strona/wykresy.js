@@ -95,6 +95,11 @@ function wykresLat(cfg, lata) {
       },
     },
   });
+  // uczciwość porównania: rok z mapy ma wszystkie sceny sezonu, pozostałe lata tylko po 2
+  const opis = document.querySelector('#zrodlo-sst');
+  opis.textContent += (opis.textContent ? ' ' : '') + `Wykres lat: ${rok} liczony ze wszystkich `
+    + `${naMapie.length} scen sezonu, pozostałe lata tylko z 2 scen ze szczytu sezonu (lipiec–sierpień), `
+    + 'więc ich prawdziwy szczyt mógł być wyższy.';
 }
 
 Promise.all([wczytajJson('sceny.json'), wczytajJson('sst.json'), wczytajJson('lata.json')])
