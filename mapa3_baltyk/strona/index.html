@@ -21,9 +21,13 @@
   .skala { display: flex; justify-content: space-between; font-size: 12px; }
   .wynik { font-size: 28px; font-weight: 700; color: #a50026; }
   .opis { font-size: 13px; line-height: 1.5; color: #4b6272; }
+  #wykresy { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; padding: 18px 22px; background: #fff; }
+  .wykres { position: relative; height: 320px; }
+  #zrodlo-sst { grid-column: 1 / -1; margin: 0; }
   @media (max-width: 760px) {
     main { display: flex; flex-direction: column; height: auto; }
     #mapa { height: 60vh; }
+    #wykresy { grid-template-columns: 1fr; }
   }
 </style>
 </head>
@@ -54,6 +58,11 @@
       Szare/puste miejsca = chmury lub ląd.</p>
   </aside>
 </main>
+<section id="wykresy" aria-label="Wykresy zakwitu">
+  <div class="wykres"><canvas id="wykres-sezon"></canvas></div>
+  <div class="wykres"><canvas id="wykres-lata"></canvas></div>
+  <p class="opis" id="zrodlo-sst"></p>
+</section>
 <script src="vendor/leaflet.js"></script>
 <script>
 const mapa = L.map('mapa').setView([54.58, 18.85], 10);
@@ -97,5 +106,7 @@ fetch('sceny.json').then(r => r.json()).then(cfg => {
 fetch('zatoka.geojson').then(r => r.json()).then(g =>
   L.geoJSON(g, { style: { color: '#0b3954', weight: 1, fill: false, dashArray: '4 4' } }).addTo(mapa));
 </script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="wykresy.js"></script>
 </body>
 </html>
