@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Sinice w Zatoce Gdańskiej • lato 2026</title>
 <link rel="stylesheet" href="vendor/leaflet.css">
+<link rel="stylesheet" href="dodatki.css">
   <style>
     :root {
       --navy: #0b3954;
@@ -391,10 +392,17 @@ let warstwa = null, sceny = [];
 function pokaz() {
   const data = document.querySelector('#data').value;
   const typ = document.querySelector('#warstwa').value;
-  if (warstwa) mapa.removeLayer(warstwa);
+  // nowa warstwa ładuje się nad starą, stara znika dopiero po załadowaniu (animacja bez mrugania)
+  const stara = warstwa;
   warstwa = L.tileLayer(`kafelki/${typ}/${data}/{z}/{x}/{y}.png`, {
-    minZoom: 9, maxNativeZoom: 11, maxZoom: 16, opacity: typ === 'mci' ? 0.9 : 1
+    minZoom: 9, maxNativeZoom: 11, maxZoom: 16, opacity: typ === 'mci' ? 0.9 : 1,
+    bounds: window.zasiegKafelkow     // bez zapytań o kafelki spoza zatoki (404)
   }).addTo(mapa);
+  if (stara) {
+    const usun = () => mapa.hasLayer(stara) && mapa.removeLayer(stara);
+    warstwa.once('load', usun);
+    setTimeout(usun, 1500);
+  }
   document.querySelector('#legenda').hidden = typ !== 'mci';
   const s = sceny.find(x => x.data === data);
   document.querySelector('#zakwit').textContent = s.zakwit_pct === null ? 'brak danych' : s.zakwit_pct + '%';
@@ -419,11 +427,19 @@ fetch('sceny.json').then(r => r.json()).then(cfg => {
   wybor.addEventListener('change', pokaz);
   document.querySelector('#warstwa').addEventListener('change', pokaz);
   pokaz();
+  window.scenyGotowe = cfg;   // dla skryptów, które wczytają się później
+  document.dispatchEvent(new CustomEvent('sceny-gotowe', { detail: cfg }));
 });
-fetch('zatoka.geojson').then(r => r.json()).then(g =>
-  L.geoJSON(g, { style: { color: '#0b3954', weight: 1, fill: false, dashArray: '4 4' } }).addTo(mapa));
+fetch('zatoka.geojson').then(r => r.json()).then(g => {
+  const obrys = L.geoJSON(g, { style: { color: '#0b3954', weight: 1, fill: false, dashArray: '4 4' } }).addTo(mapa);
+  mapa.fitBounds(obrys.getBounds(), { paddingBottomRight: [0, 70] });   // cała zatoka, nad paskiem czasu
+  window.zasiegKafelkow = obrys.getBounds().pad(0.02);
+  if (sceny.length) pokaz();
+});
 </script>
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="vendor/chart.umd.min.js"></script>  <!-- lokalnie: firewall na uczelni może blokować CDN -->
 <script src="wykresy.js"></script>
+<script src="mapa.js"></script>
+<script src="live.js"></script>
 </body>
 </html>
