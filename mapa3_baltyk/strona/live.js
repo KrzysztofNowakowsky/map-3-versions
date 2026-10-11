@@ -34,8 +34,8 @@ function punkty(hydro) {
     if (t === null) return;
     const ikona = L.divIcon({
       className: 'punkt-live',
-      html: `<span class="puls" style="background:${kolor(t)}"></span><b style="background:${kolor(t)}">${t.toFixed(1)}°</b>`,
-      iconSize: [46, 24], iconAnchor: [23, 12],
+      html: `<b><i style="background:${kolor(t)}"></i>${t.toFixed(1)}°</b>`,
+      iconSize: [54, 22], iconAnchor: [27, 11],
     });
     L.marker([liczba(s.lat), liczba(s.lon)], { icon: ikona, zIndexOffset: 1000 })
       .bindPopup(`<b>${s.stacja}</b> (IMGW-PIB)<br>woda: <b>${t.toFixed(1)} °C</b>`
@@ -73,6 +73,9 @@ function karta(d) {
     </svg>
     <p class="opis">Prognoza temperatury morza na 7 dni. To dane z <b>dzisiaj</b> — mapa pokazuje sezon ${document.querySelector('header h1').textContent.match(/\d{4}/)?.[0] || ''}. Kliknij punkt na mapie, żeby zobaczyć stację.</p>`;
   document.querySelector('#szczegoly').after(div);
+  document.querySelector('#kpi-morze').textContent = `${t.toFixed(1)}°C`;
+  document.querySelector('#kpi-morze-opis').textContent = d.offline
+    ? `zapis z ${godzina(d.offline)} (offline)` : `Open-Meteo · ${sr}°C na stacjach IMGW`;
 }
 
 async function start() {

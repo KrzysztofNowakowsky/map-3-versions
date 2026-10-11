@@ -18,7 +18,7 @@ function opisDaty(s) {
 
 function warstwaKafelkow(data, typ, opcje = {}) {
   return L.tileLayer(`kafelki/${typ}/${data}/{z}/{x}/{y}.png`, {
-    minZoom: 9, maxNativeZoom: 11, maxZoom: 16, opacity: typ === 'mci' ? 0.9 : 1,
+    minZoom: 7, minNativeZoom: 9, maxNativeZoom: 11, maxZoom: 16, opacity: typ === 'mci' ? 0.9 : 1,
     bounds: window.zasiegKafelkow, ...opcje
   });
 }
