@@ -82,8 +82,9 @@ class ChmuryTests(unittest.TestCase):
 
     def test_uzupelnione_przygaszone_na_mapie(self):
         rgba = koloruj_mci(np.array([[20.0, 20.0]]), przygaszone=np.array([[False, True]]))
-        self.assertEqual(int(rgba[0, 0, 3]), 255)
-        self.assertLess(int(rgba[0, 1, 3]), 255)
+        self.assertEqual(int(rgba[0, 1, 3]), 255)                    # krycie pełne (paleta PNG)
+        self.assertFalse((rgba[0, 0, :3] == rgba[0, 1, :3]).all())  # ale kolor rozjaśniony
+        self.assertGreater(int(rgba[0, 1, :3].astype(int).sum()), int(rgba[0, 0, :3].astype(int).sum()))
 
 
 class KafelkiTests(unittest.TestCase):

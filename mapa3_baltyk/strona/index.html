@@ -5,361 +5,32 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Sinice w Zatoce Gdańskiej • lato 2026</title>
 <link rel="stylesheet" href="vendor/leaflet.css">
-  <style>
-    :root {
-      --navy: #0b3954;
-      --navy-light: #155779;
-      --blue: #1976d2;
-      --bg: #f1f5f9;
-      --card: #ffffff;
-      --text: #183247;
-      --muted: #63798b;
-      --border: #dce6ef;
-      --red: #b31243;
-      --radius: 16px;
-      --shadow: 0 5px 22px rgba(20, 55, 80, .07);
-    }
-
-    * {
-      box-sizing: border-box;
-    }
-
-    html {
-      scroll-behavior: smooth;
-    }
-
-    body {
-      margin: 0;
-      font: 15px/1.55 system-ui, -apple-system, BlinkMacSystemFont,
-            "Segoe UI", sans-serif;
-      color: var(--text);
-      background: var(--bg);
-    }
-
-    /* NAGŁÓWEK */
-
-    header {
-      position: relative;
-      padding: 22px 30px;
-      color: #fff;
-      background: linear-gradient(115deg, #082e46, #105477);
-      border-bottom: 3px solid #35b6c7;
-    }
-
-    header h1 {
-      margin: 0;
-      font-size: clamp(21px, 2.2vw, 30px);
-      line-height: 1.25;
-      font-weight: 750;
-      letter-spacing: -.5px;
-    }
-
-    header p {
-      margin: 7px 0 0;
-      color: #c8e1ef;
-      font-size: 14px;
-      letter-spacing: .2px;
-    }
-
-    /* MAPA I PANEL */
-
-    main {
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) 340px;
-      gap: 18px;
-      padding: 20px;
-      min-height: 610px;
-      height: min(760px, calc(100vh - 100px));
-    }
-
-    #mapa {
-      min-width: 0;
-      height: 100%;
-      border: 1px solid #d6e2eb;
-      border-radius: var(--radius);
-      overflow: hidden;
-      background: #dce8ef;
-      box-shadow: var(--shadow);
-      z-index: 0;
-    }
-
-    .leaflet-container {
-      font: inherit;
-    }
-
-    .leaflet-control-zoom a {
-      color: var(--navy) !important;
-    }
-
-    .leaflet-control-attribution {
-      font-size: 10px !important;
-    }
-
-    aside {
-      min-width: 0;
-      padding: 23px;
-      overflow-y: auto;
-      background: var(--card);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      box-shadow: var(--shadow);
-    }
-
-    aside h2 {
-      margin: 0 0 20px;
-      color: var(--navy);
-      font-size: 21px;
-      font-weight: 750;
-      letter-spacing: -.3px;
-    }
-
-    /* POLA FORMULARZA */
-
-    label {
-      display: block;
-      margin: 19px 0 7px;
-      color: #29485f;
-      font-size: 13px;
-      font-weight: 700;
-    }
-
-    select {
-      display: block;
-      width: 100%;
-      min-height: 44px;
-      padding: 10px 12px;
-      margin: 0;
-      color: var(--text);
-      font: inherit;
-      background: #fafdff;
-      border: 1px solid #cddce8;
-      border-radius: 9px;
-      outline: none;
-      cursor: pointer;
-      transition: border-color .2s, box-shadow .2s;
-    }
-
-    select:hover {
-      border-color: #8eafc7;
-    }
-
-    select:focus-visible,
-    input:focus-visible {
-      outline: 3px solid rgba(25, 118, 210, .2);
-      outline-offset: 2px;
-    }
-
-    /* LEGENDA MCI */
-
-    #legenda {
-      margin-top: 17px;
-      padding: 14px;
-      background: #f5f9fc;
-      border: 1px solid var(--border);
-      border-radius: 10px;
-    }
-
-    .rampa {
-      height: 16px;
-      margin: 0 0 8px;
-      border-radius: 5px;
-      box-shadow: inset 0 0 0 1px rgba(0,0,0,.06);
-    }
-
-    .skala {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 8px;
-      color: var(--muted);
-      font-size: 12px;
-    }
-
-    /* STATYSTYKA ZAKWITU */
-
-    .wynik {
-      margin-top: 2px;
-      color: var(--red);
-      font-size: clamp(36px, 4vw, 46px);
-      line-height: 1.2;
-      font-weight: 800;
-      letter-spacing: -1.5px;
-      font-variant-numeric: tabular-nums;
-    }
-
-    aside > label:has(+ #zakwit) {
-      margin-top: 24px;
-    }
-
-    .opis {
-      color: var(--muted);
-      font-size: 12.5px;
-      line-height: 1.75;
-    }
-
-    #szczegoly {
-      margin: 8px 0 18px;
-      color: #405b70;
-      overflow-wrap: anywhere;
-    }
-
-    aside > .opis:last-child {
-      margin-top: 20px;
-      padding-top: 15px;
-      border-top: 1px solid var(--border);
-    }
-
-    /* WYKRESY */
-
-    #wykresy {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 18px;
-      padding: 0 20px 16px;
-      background: var(--bg);
-    }
-
-    .wykres {
-      position: relative;
-      min-width: 0;
-      height: 340px;
-      padding: 20px;
-      background: var(--card);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      box-shadow: var(--shadow);
-    }
-
-    #zrodlo-sst {
-      grid-column: 1 / -1;
-      margin: 0;
-      padding: 0 3px;
-      font-size: 12px;
-    }
-
-    /* PASKI PRZEWIJANIA */
-
-    * {
-      scrollbar-width: thin;
-      scrollbar-color: #b8cad8 transparent;
-    }
-
-    /* RESPONSYWNOŚĆ */
-
-    @media (min-width: 1500px) {
-      main {
-        grid-template-columns: minmax(0, 1fr) 370px;
-      }
-
-      .wykres {
-        height: 370px;
-      }
-    }
-
-    @media (max-width: 1000px) {
-      main {
-        grid-template-columns: minmax(0, 1fr) 300px;
-        gap: 12px;
-        padding: 12px;
-        min-height: 560px;
-      }
-
-      aside {
-        padding: 18px;
-      }
-
-      #wykresy {
-        gap: 12px;
-        padding: 0 12px 12px;
-      }
-
-      .wykres {
-        height: 300px;
-        padding: 14px;
-      }
-    }
-
-    @media (max-width: 760px) {
-      header {
-        padding: 19px 17px;
-      }
-
-      header p {
-        font-size: 12px;
-      }
-
-      main {
-        display: flex;
-        flex-direction: column;
-        height: auto;
-        min-height: 0;
-        padding: 12px;
-        gap: 12px;
-      }
-
-      #mapa {
-        height: 55vh;
-        min-height: 340px;
-        max-height: 570px;
-        flex-shrink: 0;
-      }
-
-      aside {
-        padding: 19px;
-        overflow: visible;
-      }
-
-      aside h2 {
-        margin-bottom: 14px;
-      }
-
-      #wykresy {
-        grid-template-columns: minmax(0, 1fr);
-        padding: 0 12px 16px;
-        gap: 12px;
-      }
-
-      .wykres {
-        height: 300px;
-      }
-
-      #zrodlo-sst {
-        grid-column: auto;
-      }
-    }
-
-    @media (max-width: 380px) {
-      header h1 {
-        font-size: 20px;
-      }
-
-      #mapa {
-        min-height: 290px;
-      }
-
-      aside {
-        padding: 15px;
-      }
-
-      .wykres {
-        height: 260px;
-        padding: 10px;
-      }
-    }
-  </style>
+<link rel="stylesheet" href="styl.css">
 </head>
 <body>
-<header>
-  <h1>Sinice w Zatoce Gdańskiej • lato 2026</h1>
-  <p>Sentinel-2 • indeks MCI (Maximum Chlorophyll Index) • AGH, projekt grupowy</p>
+<header class="topbar">
+  <div class="marka">
+    <span class="znak" aria-hidden="true"></span>
+    <div>
+      <h1>Sinice w Zatoce Gdańskiej • lato 2019</h1>
+      <p>Sentinel-2 · indeks MCI (chlorofil) · AGH, projekt grupowy</p>
+    </div>
+  </div>
+  <div class="zrodla">Copernicus/ESA · IMGW-PIB · Open-Meteo</div>
 </header>
+<section id="kpi" aria-label="Najważniejsze wartości">
+  <div class="kafel"><span class="etykieta">Scena</span><b id="kpi-data">–</b><small id="kpi-dzien">Sentinel-2, przelot ok. 10:00</small></div>
+  <div class="kafel akcent"><span class="etykieta">Zakwit w zatoce</span><b id="zakwit">–</b><small>% wody z MCI &gt; 30</small></div>
+  <div class="kafel"><span class="etykieta">Czysta woda</span><b id="kpi-woda">–</b><small>widoczna bez chmur</small></div>
+  <div class="kafel"><span class="etykieta">Morze dziś</span><b id="kpi-morze">–</b><small id="kpi-morze-opis">Open-Meteo · na żywo</small></div>
+</section>
 <main>
   <div id="mapa" aria-label="Mapa zakwitów"></div>
   <aside>
-    <h2>Wybór sceny</h2>
+    <h2>Warstwa</h2>
     <label for="data">Data zdjęcia</label>
     <select id="data"></select>
-    <label for="warstwa">Warstwa</label>
+    <label for="warstwa">Widok</label>
     <select id="warstwa">
       <option value="mci">MCI (chlorofil)</option>
       <option value="rgb">Prawdziwe kolory (RGB)</option>
@@ -368,11 +39,12 @@
       <div id="rampa" class="rampa"></div>
       <div class="skala"><span id="od"></span><span>MCI</span><span id="do"></span></div>
     </div>
-    <label>Zakwit w zatoce</label>
-    <div class="wynik" id="zakwit">–</div>
     <p class="opis" id="szczegoly"></p>
-    <p class="opis">MCI = B5 − 0,4667·B4 − 0,5333·B6 (×10000). Zakwit: MCI powyżej progu, liczony tylko na wodzie bez chmur.
-      Szare/puste miejsca = chmury lub ląd.</p>
+    <div class="sekcja">
+      <span class="etykieta">Metoda</span>
+      <p class="opis">MCI = B5 − 0,4667·B4 − 0,5333·B6 (×10000). Zakwit: MCI powyżej 30, liczony tylko na wodzie bez chmur.
+        Puste miejsca = chmury lub ląd; rozjaśnione = uzupełnione z sąsiedniego dnia.</p>
+    </div>
   </aside>
 </main>
 <section id="wykresy" aria-label="Wykresy zakwitu">
@@ -382,7 +54,9 @@
 </section>
 <script src="vendor/leaflet.js"></script>
 <script>
-const mapa = L.map('mapa').setView([54.58, 18.85], 10);
+const ZATOKA = L.latLngBounds([[54.33, 18.33], [54.84, 19.65]]);   // prostokąt z zatoka.geojson
+window.zasiegKafelkow = ZATOKA.pad(0.02);                          // bez zapytań o kafelki spoza zatoki
+const mapa = L.map('mapa').fitBounds(ZATOKA, { paddingBottomRight: [0, 70] });
 L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
   maxZoom: 16, attribution: '© OpenStreetMap • Sentinel-2: Copernicus/ESA'
 }).addTo(mapa);
@@ -391,13 +65,22 @@ let warstwa = null, sceny = [];
 function pokaz() {
   const data = document.querySelector('#data').value;
   const typ = document.querySelector('#warstwa').value;
-  if (warstwa) mapa.removeLayer(warstwa);
+  // nowa warstwa ładuje się nad starą, stara znika dopiero po załadowaniu (animacja bez mrugania)
+  const stara = warstwa;
   warstwa = L.tileLayer(`kafelki/${typ}/${data}/{z}/{x}/{y}.png`, {
-    minZoom: 9, maxNativeZoom: 11, maxZoom: 16, opacity: typ === 'mci' ? 0.9 : 1
+    minZoom: 7, minNativeZoom: 9, maxNativeZoom: 11, maxZoom: 16, opacity: typ === 'mci' ? 0.9 : 1,
+    bounds: window.zasiegKafelkow     // bez zapytań o kafelki spoza zatoki (404)
   }).addTo(mapa);
+  if (stara) {
+    const usun = () => mapa.hasLayer(stara) && mapa.removeLayer(stara);
+    warstwa.once('load', usun);
+    setTimeout(usun, 1500);
+  }
   document.querySelector('#legenda').hidden = typ !== 'mci';
   const s = sceny.find(x => x.data === data);
-  document.querySelector('#zakwit').textContent = s.zakwit_pct === null ? 'brak danych' : s.zakwit_pct + '%';
+  document.querySelector('#zakwit').textContent = s.zakwit_pct === null ? '—' : s.zakwit_pct + '%';
+  document.querySelector('#kpi-data').textContent = data.split('-').reverse().join('.');
+  document.querySelector('#kpi-woda').textContent = s.wazne_pct + '%';
   document.querySelector('#szczegoly').textContent =
     `Widoczne (bez chmur): ${s.wazne_pct}% zatoki` + (s.mci_mediana === null
       ? ' • za mało czystej wody, by liczyć zakwit' : ` • mediana MCI: ${s.mci_mediana}`)
@@ -419,11 +102,16 @@ fetch('sceny.json').then(r => r.json()).then(cfg => {
   wybor.addEventListener('change', pokaz);
   document.querySelector('#warstwa').addEventListener('change', pokaz);
   pokaz();
+  window.scenyGotowe = cfg;   // dla skryptów, które wczytają się później
+  document.dispatchEvent(new CustomEvent('sceny-gotowe', { detail: cfg }));
 });
-fetch('zatoka.geojson').then(r => r.json()).then(g =>
-  L.geoJSON(g, { style: { color: '#0b3954', weight: 1, fill: false, dashArray: '4 4' } }).addTo(mapa));
+fetch('zatoka.geojson').then(r => r.json()).then(g => {
+  const obrys = L.geoJSON(g, { style: { color: '#0b3954', weight: 1, fill: false, dashArray: '4 4' } }).addTo(mapa);
+});
 </script>
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="vendor/chart.umd.min.js"></script>  <!-- lokalnie: firewall na uczelni może blokować CDN -->
 <script src="wykresy.js"></script>
+<script src="mapa.js"></script>
+<script src="live.js"></script>
 </body>
 </html>
