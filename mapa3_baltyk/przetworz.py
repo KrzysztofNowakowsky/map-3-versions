@@ -30,7 +30,8 @@ MIN_WAZNYCH_PCT = 30       # poniżej tego % czystej wody nie podajemy % zakwitu
 MIN_POKRYCIA_STRONY = 65   # na stronę tylko daty z >= 65% czystej wody (60-65% = rozproszone chmury, szum MCI, np. 28.09.2019)
 MAX_DNI_UZUPELNIENIA = 4   # dziurę po przelocie 9:50 (Zatoka Pucka) bierzemy z przelotu +-4 dni
 MAX_DNI_CHMURY = 3         # na MAPIE miejsca pod chmurami bierzemy z najbliższych czystych dni (+-3)
-ALFA_UZUPELNIONE = 150     # piksele z innego dnia rysujemy przygaszone (255 = pełne)
+PRZYGASZENIE = 0.45        # piksele z innego dnia: kolor zmieszany w 45% z jasną szarością
+                           # (nie przez alfę - paleta PNG zna tylko pełną/zerową przezroczystość)
 ZOOM_MIN, ZOOM_MAX = 9, 11  # 11 ~ 40 m/piksel; zawirowania mają km, a strona mieści się na serwerze
 SCL_WODA = [6]              # tylko czysta woda
 SCL_CHMURY = [3, 8, 9, 10]  # cień chmur, chmury średnie i wysokie, cirrus (zawyża MCI - sprawdzone na 33 scenach)
@@ -182,7 +183,8 @@ def koloruj_mci(wartosc, przygaszone=None):
     rgba = SKALA_MCI(np.nan_to_num(t), bytes=True)
     rgba[..., 3] = np.isfinite(wartosc) * 255
     if przygaszone is not None:
-        rgba[..., 3][przygaszone] = ALFA_UZUPELNIONE
+        kolor = rgba[..., :3][przygaszone].astype('float32')
+        rgba[..., :3][przygaszone] = (kolor * (1 - PRZYGASZENIE) + 215 * PRZYGASZENIE).astype('uint8')
     return rgba
 
 
